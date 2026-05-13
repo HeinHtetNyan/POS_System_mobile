@@ -26,7 +26,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ── 1. Idempotency Keys ───────────────────────────────────────────────────
+    # 1. Idempotency Keys
     # Stores completed idempotent request responses to prevent double-execution.
     # Redis is the hot path; this table is the durable fallback.
     op.create_table(
@@ -69,7 +69,7 @@ def upgrade() -> None:
         ["expires_at"],
     )
 
-    # ── 2. Additional performance indexes ────────────────────────────────────
+    # 2. Additional performance indexes
 
     # Products: tenant + active status for listing queries
     op.create_index(
@@ -108,7 +108,7 @@ def upgrade() -> None:
         postgresql_where=sa.text("is_deleted = false"),
     )
 
-    # ── 3. Check constraints for quantity integrity ───────────────────────────
+    # 3. Check constraints for quantity integrity
     # Prevents negative quantity_on_hand at the DB level (belt + suspenders).
     # The service layer enforces this first, but this is the final guard.
     op.create_check_constraint(

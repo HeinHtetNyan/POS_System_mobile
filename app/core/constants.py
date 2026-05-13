@@ -120,6 +120,91 @@ class UserStatus(str, Enum):
     PENDING_VERIFICATION = "PENDING_VERIFICATION"
 
 
+class OrderStatus(str, Enum):
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    VOIDED = "VOIDED"
+    PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED"
+    REFUNDED = "REFUNDED"
+
+
+class PaymentStatus(str, Enum):
+    PENDING = "PENDING"
+    PARTIAL = "PARTIAL"
+    PAID = "PAID"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+
+
+class PaymentMethod(str, Enum):
+    CASH = "CASH"
+    CARD = "CARD"
+    BANK_TRANSFER = "BANK_TRANSFER"
+    MOBILE_PAYMENT = "MOBILE_PAYMENT"
+    STORE_CREDIT = "STORE_CREDIT"
+
+
+class CashierSessionStatus(str, Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    RECONCILED = "RECONCILED"
+
+
+class RefundReason(str, Enum):
+    DAMAGED = "DAMAGED"
+    CUSTOMER_RETURN = "CUSTOMER_RETURN"
+    CASHIER_ERROR = "CASHIER_ERROR"
+    DUPLICATE_TRANSACTION = "DUPLICATE_TRANSACTION"
+    FRAUD_SUSPECTED = "FRAUD_SUSPECTED"
+    OTHER = "OTHER"
+
+
+class RefundType(str, Enum):
+    FULL = "FULL"
+    PARTIAL = "PARTIAL"
+
+
+class DiscountType(str, Enum):
+    PERCENTAGE = "PERCENTAGE"
+    FIXED = "FIXED"
+
+
+class DevicePlatform(str, Enum):
+    ANDROID = "ANDROID"
+    IOS = "IOS"
+    WINDOWS = "WINDOWS"
+    WEB = "WEB"
+    TABLET = "TABLET"
+
+
+class SyncOperationType(str, Enum):
+    SALE_CREATED = "SALE_CREATED"
+    REFUND_CREATED = "REFUND_CREATED"
+    INVENTORY_ADJUSTED = "INVENTORY_ADJUSTED"
+    TRANSFER_EXECUTED = "TRANSFER_EXECUTED"
+    PAYMENT_CREATED = "PAYMENT_CREATED"
+    ORDER_VOIDED = "ORDER_VOIDED"
+
+
+class SyncOperationStatus(str, Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class SyncEntityType(str, Enum):
+    PRODUCTS = "products"
+    VARIANTS = "variants"
+    INVENTORY = "inventory"
+    CATEGORIES = "categories"
+    BRANCHES = "branches"
+    SETTINGS = "settings"
+    PRICES = "prices"
+
+
 class AuditAction(str, Enum):
     # Auth
     LOGIN = "LOGIN"
@@ -189,6 +274,43 @@ class AuditAction(str, Enum):
     SUPPLIER_UPDATED = "SUPPLIER_UPDATED"
     SUPPLIER_DELETED = "SUPPLIER_DELETED"
 
+    # Sales / Orders
+    ORDER_CREATED = "ORDER_CREATED"
+    ORDER_COMPLETED = "ORDER_COMPLETED"
+    ORDER_VOIDED = "ORDER_VOIDED"
+    ORDER_CANCELLED = "ORDER_CANCELLED"
+    ORDER_REFUNDED = "ORDER_REFUNDED"
+
+    # Payments
+    PAYMENT_RECEIVED = "PAYMENT_RECEIVED"
+    PAYMENT_FAILED = "PAYMENT_FAILED"
+
+    # Refunds
+    REFUND_CREATED = "REFUND_CREATED"
+    REFUND_PROCESSED = "REFUND_PROCESSED"
+
+    # Cashier sessions
+    CASHIER_SESSION_OPENED = "CASHIER_SESSION_OPENED"
+    CASHIER_SESSION_CLOSED = "CASHIER_SESSION_CLOSED"
+    CASHIER_SESSION_RECONCILED = "CASHIER_SESSION_RECONCILED"
+
+    # Receipts
+    RECEIPT_GENERATED = "RECEIPT_GENERATED"
+    RECEIPT_VOIDED = "RECEIPT_VOIDED"
+
+    # Discounts
+    DISCOUNT_APPLIED = "DISCOUNT_APPLIED"
+
+    # Devices (Phase 4)
+    DEVICE_REGISTERED = "DEVICE_REGISTERED"
+    DEVICE_UPDATED = "DEVICE_UPDATED"
+    DEVICE_DEACTIVATED = "DEVICE_DEACTIVATED"
+
+    # Sync (Phase 4)
+    SYNC_PUSH_COMPLETED = "SYNC_PUSH_COMPLETED"
+    SYNC_OPERATION_REPLAYED = "SYNC_OPERATION_REPLAYED"
+    SYNC_OPERATION_FAILED = "SYNC_OPERATION_FAILED"
+
 
 class PermissionScope(str, Enum):
     GLOBAL = "GLOBAL"
@@ -212,6 +334,18 @@ class EntityType(str, Enum):
     INVENTORY_ADJUSTMENT = "INVENTORY_ADJUSTMENT"
     INVENTORY_TRANSFER = "INVENTORY_TRANSFER"
     SUPPLIER = "SUPPLIER"
+    # Phase 3
+    ORDER = "ORDER"
+    ORDER_ITEM = "ORDER_ITEM"
+    PAYMENT = "PAYMENT"
+    REFUND = "REFUND"
+    CASHIER_SESSION = "CASHIER_SESSION"
+    RECEIPT = "RECEIPT"
+    CART = "CART"
+    # Phase 4
+    DEVICE = "DEVICE"
+    SYNC_OPERATION = "SYNC_OPERATION"
+    SYNC_CHECKPOINT = "SYNC_CHECKPOINT"
 
 
 # Permission codes
@@ -260,11 +394,27 @@ class Permission(str, Enum):
     SUPPLIER_VIEW = "supplier:view"
     SUPPLIER_MANAGE = "supplier:manage"
 
-    # POS permissions (foundation for future)
+    # POS / Sales permissions
     POS_ACCESS = "pos:access"
     POS_SALE_CREATE = "pos:sale:create"
     POS_SALE_VOID = "pos:sale:void"
     POS_REFUND = "pos:refund"
+    SALES_VIEW = "sales:view"
+    SALES_CREATE = "sales:create"
+    SALES_VOID = "sales:void"
+    SALES_REFUND = "sales:refund"
+    PAYMENTS_MANAGE = "payments:manage"
+    CASHIER_OPEN_SESSION = "cashier:open_session"
+    CASHIER_CLOSE_SESSION = "cashier:close_session"
+    RECEIPTS_VIEW = "receipts:view"
+
+    # Device permissions
+    DEVICE_VIEW = "device:view"
+    DEVICE_MANAGE = "device:manage"
+
+    # Sync permissions
+    SYNC_PUSH = "sync:push"
+    SYNC_PULL = "sync:pull"
 
     # Report permissions
     REPORT_VIEW = "report:view"
@@ -319,10 +469,22 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.POS_SALE_CREATE,
         Permission.POS_SALE_VOID,
         Permission.POS_REFUND,
+        Permission.SALES_VIEW,
+        Permission.SALES_CREATE,
+        Permission.SALES_VOID,
+        Permission.SALES_REFUND,
+        Permission.PAYMENTS_MANAGE,
+        Permission.CASHIER_OPEN_SESSION,
+        Permission.CASHIER_CLOSE_SESSION,
+        Permission.RECEIPTS_VIEW,
         Permission.REPORT_VIEW,
         Permission.REPORT_PROFIT,
         Permission.REPORT_EXPORT,
         Permission.AUDIT_VIEW,
+        Permission.DEVICE_VIEW,
+        Permission.DEVICE_MANAGE,
+        Permission.SYNC_PUSH,
+        Permission.SYNC_PULL,
     ],
     UserRole.MANAGER: [
         Permission.USER_VIEW,
@@ -345,13 +507,34 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.POS_SALE_CREATE,
         Permission.POS_SALE_VOID,
         Permission.POS_REFUND,
+        Permission.SALES_VIEW,
+        Permission.SALES_CREATE,
+        Permission.SALES_VOID,
+        Permission.SALES_REFUND,
+        Permission.PAYMENTS_MANAGE,
+        Permission.CASHIER_OPEN_SESSION,
+        Permission.CASHIER_CLOSE_SESSION,
+        Permission.RECEIPTS_VIEW,
         Permission.REPORT_VIEW,
+        Permission.DEVICE_VIEW,
+        Permission.DEVICE_MANAGE,
+        Permission.SYNC_PUSH,
+        Permission.SYNC_PULL,
     ],
     UserRole.CASHIER: [
         Permission.POS_ACCESS,
         Permission.POS_SALE_CREATE,
+        Permission.SALES_VIEW,
+        Permission.SALES_CREATE,
+        Permission.PAYMENTS_MANAGE,
+        Permission.CASHIER_OPEN_SESSION,
+        Permission.CASHIER_CLOSE_SESSION,
+        Permission.RECEIPTS_VIEW,
         Permission.INVENTORY_VIEW,
         Permission.PRODUCT_VIEW,
+        Permission.DEVICE_VIEW,
+        Permission.SYNC_PUSH,
+        Permission.SYNC_PULL,
     ],
     UserRole.INVENTORY_STAFF: [
         Permission.PRODUCT_VIEW,

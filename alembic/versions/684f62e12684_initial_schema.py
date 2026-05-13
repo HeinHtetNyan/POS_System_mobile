@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ── 1. permissions (no FK deps) ──────────────────────────────────────────
+    # 1. permissions (no FK deps)
     op.create_table('permissions',
         sa.Column('code', sa.String(length=100), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
@@ -35,7 +35,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_permissions_code'), 'permissions', ['code'], unique=True)
 
-    # ── 2. tenants (owner_id FK deferred — circular with users) ─────────────
+    # 2. tenants (owner_id FK deferred — circular with users)
     op.create_table('tenants',
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('slug', sa.String(length=100), nullable=False),
@@ -61,7 +61,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_tenants_owner_id'), 'tenants', ['owner_id'], unique=False)
     op.create_index(op.f('ix_tenants_slug'), 'tenants', ['slug'], unique=True)
 
-    # ── 3. users (tenant_id → tenants OK; primary_branch_id FK deferred) ────
+    # 3. users (tenant_id → tenants OK; primary_branch_id FK deferred)
     op.create_table('users',
         sa.Column('email', sa.String(length=255), nullable=False),
         sa.Column('hashed_password', sa.String(length=255), nullable=False),
@@ -91,7 +91,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_users_status'), 'users', ['status'], unique=False)
     op.create_index(op.f('ix_users_tenant_id'), 'users', ['tenant_id'], unique=False)
 
-    # ── 4. branches (tenant_id → tenants OK; manager_id FK deferred) ────────
+    # 4. branches (tenant_id → tenants OK; manager_id FK deferred)
     op.create_table('branches',
         sa.Column('tenant_id', sa.UUID(), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
@@ -120,7 +120,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_branches_status'), 'branches', ['status'], unique=False)
     op.create_index(op.f('ix_branches_tenant_id'), 'branches', ['tenant_id'], unique=False)
 
-    # ── 5. audit_logs ────────────────────────────────────────────────────────
+    # 5. audit_logs
     op.create_table('audit_logs',
         sa.Column('actor_user_id', sa.UUID(), nullable=True),
         sa.Column('tenant_id', sa.UUID(), nullable=True),
@@ -151,7 +151,7 @@ def upgrade() -> None:
     op.create_index('ix_audit_logs_entity_type_entity_id', 'audit_logs', ['entity_type', 'entity_id'], unique=False)
     op.create_index('ix_audit_logs_tenant_id', 'audit_logs', ['tenant_id'], unique=False)
 
-    # ── 6. branch_settings ───────────────────────────────────────────────────
+    # 6. branch_settings
     op.create_table('branch_settings',
         sa.Column('branch_id', sa.UUID(), nullable=False),
         sa.Column('tenant_id', sa.UUID(), nullable=False),
@@ -171,7 +171,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_branch_settings_branch_id'), 'branch_settings', ['branch_id'], unique=True)
     op.create_index(op.f('ix_branch_settings_tenant_id'), 'branch_settings', ['tenant_id'], unique=False)
 
-    # ── 7. refresh_tokens ────────────────────────────────────────────────────
+    # 7. refresh_tokens
     op.create_table('refresh_tokens',
         sa.Column('user_id', sa.UUID(), nullable=False),
         sa.Column('token_hash', sa.String(length=255), nullable=False),
@@ -194,7 +194,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_refresh_tokens_token_hash'), 'refresh_tokens', ['token_hash'], unique=True)
     op.create_index(op.f('ix_refresh_tokens_user_id'), 'refresh_tokens', ['user_id'], unique=False)
 
-    # ── 8. reseller_assignments ──────────────────────────────────────────────
+    # 8. reseller_assignments
     op.create_table('reseller_assignments',
         sa.Column('reseller_id', sa.UUID(), nullable=False),
         sa.Column('tenant_id', sa.UUID(), nullable=False),
@@ -220,7 +220,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_reseller_assignments_reseller_id'), 'reseller_assignments', ['reseller_id'], unique=False)
     op.create_index(op.f('ix_reseller_assignments_tenant_id'), 'reseller_assignments', ['tenant_id'], unique=False)
 
-    # ── 9. role_permissions ──────────────────────────────────────────────────
+    # 9. role_permissions
     op.create_table('role_permissions',
         sa.Column('role', sa.String(length=50), nullable=False),
         sa.Column('permission_id', sa.UUID(), nullable=False),
@@ -235,7 +235,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_role_permissions_role'), 'role_permissions', ['role'], unique=False)
 
-    # ── 10. tenant_settings ──────────────────────────────────────────────────
+    # 10. tenant_settings
     op.create_table('tenant_settings',
         sa.Column('tenant_id', sa.UUID(), nullable=False),
         sa.Column('features_enabled', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -252,7 +252,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_tenant_settings_tenant_id'), 'tenant_settings', ['tenant_id'], unique=True)
 
-    # ── 11. user_branch_assignments ──────────────────────────────────────────
+    # 11. user_branch_assignments
     op.create_table('user_branch_assignments',
         sa.Column('user_id', sa.UUID(), nullable=False),
         sa.Column('branch_id', sa.UUID(), nullable=False),
@@ -274,7 +274,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_user_branch_assignments_tenant_id'), 'user_branch_assignments', ['tenant_id'], unique=False)
     op.create_index(op.f('ix_user_branch_assignments_user_id'), 'user_branch_assignments', ['user_id'], unique=False)
 
-    # ── 12. user_permissions ─────────────────────────────────────────────────
+    # 12. user_permissions
     op.create_table('user_permissions',
         sa.Column('user_id', sa.UUID(), nullable=False),
         sa.Column('permission_id', sa.UUID(), nullable=False),
@@ -304,7 +304,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_user_permissions_tenant_id'), 'user_permissions', ['tenant_id'], unique=False)
     op.create_index(op.f('ix_user_permissions_user_id'), 'user_permissions', ['user_id'], unique=False)
 
-    # ── 13. Deferred circular FKs via ALTER TABLE ─────────────────────────────
+    # 13. Deferred circular FKs via ALTER TABLE
     op.create_foreign_key(
         'fk_tenants_owner_id_users', 'tenants', 'users',
         ['owner_id'], ['id'], ondelete='SET NULL',

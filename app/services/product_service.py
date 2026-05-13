@@ -541,7 +541,7 @@ class ProductService:
             raise NotFoundError("Product", f"sku={sku}")
         return product
 
-    # ── Variants ──────────────────────────────────────────────────────────────
+    # Variants
 
     async def add_variant(
         self,

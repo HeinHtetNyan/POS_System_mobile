@@ -26,6 +26,14 @@ from app.models.inventory import (
     StockMovement,
 )
 from app.models.supplier import Supplier, SupplierContact
+# Phase 3 — Sales Engine
+from app.cashiers.models import CashierSession
+from app.sales.models import BranchCounter, Cart, CartItem, Order, OrderItem
+from app.payments.models import Payment, Refund, RefundItem
+from app.receipts.models import Receipt
+# Phase 4 — Offline Sync
+from app.devices.models import PosDevice
+from app.sync.models import SyncCheckpoint, SyncOperation
 
 __all__ = [
     "AuditLog",
@@ -56,4 +64,19 @@ __all__ = [
     "InventoryTransferItem",
     "Supplier",
     "SupplierContact",
+    # Phase 3
+    "CashierSession",
+    "BranchCounter",
+    "Cart",
+    "CartItem",
+    "Order",
+    "OrderItem",
+    "Payment",
+    "Refund",
+    "RefundItem",
+    "Receipt",
+    # Phase 4
+    "PosDevice",
+    "SyncCheckpoint",
+    "SyncOperation",
 ]

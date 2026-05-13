@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.tasks.audit_tasks",
         "app.tasks.notification_tasks",
         "app.tasks.inventory_tasks",
+        "app.tasks.sync_tasks",
     ],
 )
 
@@ -38,5 +39,17 @@ celery_app.conf.update(
         #     "schedule": 86400,
         #     "kwargs": {"tenant_id": "<uuid>"},
         # },
+        "sync-retry-failed-operations-hourly": {
+            "task": "app.tasks.sync_tasks.retry_failed_sync_operations",
+            "schedule": 3600,  # every hour
+        },
+        "sync-cleanup-old-logs-daily": {
+            "task": "app.tasks.sync_tasks.cleanup_old_sync_logs",
+            "schedule": 86400,  # every 24 hours
+        },
+        "sync-cleanup-stale-devices-daily": {
+            "task": "app.tasks.sync_tasks.cleanup_stale_devices",
+            "schedule": 86400,  # every 24 hours
+        },
     },
 )
