@@ -1,0 +1,31 @@
+import type { Config } from 'tailwindcss'
+
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Outfit', 'system-ui', 'sans-serif'],
+        mono: ['Space Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        accent: 'var(--accent, #F59E0B)',
+      },
+      animation: {
+        fadeIn: 'fadeIn 0.2s ease-out both',
+        slideIn: 'slideIn 0.25s ease-out both',
+      },
+      keyframes: {
+        fadeIn: {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideIn: {
+          from: { transform: 'translateX(100%)' },
+          to:   { transform: 'translateX(0)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config
