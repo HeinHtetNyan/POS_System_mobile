@@ -67,6 +67,13 @@ nginx/certs/
 .docker/
 docker-compose.override.yml
 
+# Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+frontend/.vite/
+
 # OS
 .DS_Store
 Thumbs.db

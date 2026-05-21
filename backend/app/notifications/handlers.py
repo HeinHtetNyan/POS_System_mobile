@@ -1,0 +1,547 @@
+from __future__ import annotations
+
+"""
+Notification event handlers.
+
+Imported at application startup (main.py) to register all handlers with the
+process-level event_publisher. Each handler opens its own DB session so that
+failures here do NOT roll back the originating business transaction.
+"""
+
+from app.core.constants import NotificationPriority, NotificationType
+from app.core.logging import get_logger
+from app.events.base import DomainEvent
+from app.events.publisher import event_publisher
+from app.events.types import EventType
+
+logger = get_logger(__name__)
+
+
+async def _get_tenant_user_ids(session, tenant_id) -> list:  # type: ignore[no-untyped-def]
+    """Return all active user IDs for a tenant (manager+)."""
+    from sqlalchemy import select
+
+    from app.core.constants import UserRole, UserStatus
+    from app.models.user import User
+
+    result = await session.execute(
+        select(User.id).where(
+            User.tenant_id == tenant_id,
+            User.status == UserStatus.ACTIVE,
+            User.role.in_([
+                UserRole.BUSINESS_OWNER.value,
+                UserRole.MANAGER.value,
+            ]),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _get_super_admin_ids(session) -> list:  # type: ignore[no-untyped-def]
+    from sqlalchemy import select
+
+    from app.core.constants import UserRole, UserStatus
+    from app.models.user import User
+
+    result = await session.execute(
+        select(User.id).where(
+            User.role == UserRole.SUPER_ADMIN.value,
+            User.status == UserStatus.ACTIVE,
+        )
+    )
+    return list(result.scalars().all())
+
+
+
+@event_publisher.on(EventType.LOW_STOCK)
+async def handle_low_stock(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.email import email_service
+    from app.notifications.services import NotificationService
+
+    product_name = event.payload.get("product_name", "Unknown Product")
+    sku = event.payload.get("sku", "")
+    current_stock = event.payload.get("current_stock", 0)
+    reorder_level = event.payload.get("reorder_level", 0)
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            notification = await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.INVENTORY,
+                priority=NotificationPriority.HIGH,
+                title=f"Low Stock Alert: {product_name}",
+                message=(
+                    f"{product_name} (SKU: {sku}) is below reorder level. "
+                    f"Current stock: {current_stock}, reorder at: {reorder_level}."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+
+            # Queue email for each recipient who has email + inventory enabled
+            for uid in recipient_ids:
+                if await svc.is_email_enabled_for_type(uid, NotificationType.INVENTORY):
+                    await email_service.queue_email_notification(
+                        to="",  # resolved by Celery task from user_id
+                        template_name="low_stock",
+                        context={
+                            "recipient_name": "",
+                            "product_name": product_name,
+                            "sku": sku,
+                            "current_stock": current_stock,
+                            "reorder_level": reorder_level,
+                        },
+                        user_id=uid,
+                    )
+
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_low_stock_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.PURCHASE_ORDER_APPROVED)
+async def handle_purchase_order_approved(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.email import email_service
+    from app.notifications.services import NotificationService
+
+    po_number = event.payload.get("po_number", "")
+    supplier_name = event.payload.get("supplier_name", "")
+    total_amount = event.payload.get("total_amount", "")
+    currency = event.payload.get("currency", "USD")
+    expected_date = event.payload.get("expected_date", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.PROCUREMENT,
+                priority=NotificationPriority.MEDIUM,
+                title=f"Purchase Order {po_number} Approved",
+                message=(
+                    f"PO {po_number} from {supplier_name} has been approved. "
+                    f"Total: {total_amount} {currency}."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+
+            for uid in recipient_ids:
+                if await svc.is_email_enabled_for_type(uid, NotificationType.PROCUREMENT):
+                    await email_service.queue_email_notification(
+                        to="",
+                        template_name="purchase_order_approved",
+                        context={
+                            "recipient_name": "",
+                            "po_number": po_number,
+                            "supplier_name": supplier_name,
+                            "total_amount": total_amount,
+                            "currency": currency,
+                            "expected_date": expected_date,
+                        },
+                        user_id=uid,
+                    )
+
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_po_approved_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.GOODS_RECEIPT_CREATED)
+async def handle_goods_receipt_created(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    receipt_number = event.payload.get("receipt_number", "")
+    po_number = event.payload.get("po_number", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.PROCUREMENT,
+                priority=NotificationPriority.LOW,
+                title=f"Goods Receipt {receipt_number} Created",
+                message=f"Goods receipt {receipt_number} for PO {po_number} has been recorded.",
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_gr_created_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.PAYABLE_OVERDUE)
+async def handle_payable_overdue(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    supplier_name = event.payload.get("supplier_name", "")
+    amount = event.payload.get("remaining_amount", "")
+    po_number = event.payload.get("po_number", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.PROCUREMENT,
+                priority=NotificationPriority.HIGH,
+                title=f"Overdue Payable: {supplier_name}",
+                message=(
+                    f"Supplier payable for PO {po_number} ({supplier_name}) "
+                    f"is overdue. Outstanding: {amount}."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_payable_overdue_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.CUSTOMER_BALANCE_HIGH)
+async def handle_customer_balance_high(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    customer_name = event.payload.get("customer_name", "")
+    balance = event.payload.get("current_balance", "")
+    credit_limit = event.payload.get("credit_limit", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.CUSTOMER,
+                priority=NotificationPriority.HIGH,
+                title=f"High Balance Alert: {customer_name}",
+                message=(
+                    f"Customer {customer_name} has an outstanding balance of "
+                    f"{balance} (credit limit: {credit_limit})."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_customer_balance_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.TRIAL_EXPIRING)
+async def handle_trial_expiring(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.email import email_service
+    from app.notifications.services import NotificationService
+
+    days = event.payload.get("days_remaining", 0)
+    tenant_name = event.payload.get("tenant_name", "")
+    expires_at = event.payload.get("expires_at", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SUBSCRIPTION,
+                priority=NotificationPriority.HIGH if days <= 1 else NotificationPriority.MEDIUM,
+                title=f"Trial Expires in {days} Day(s)",
+                message=(
+                    f"Your trial subscription for {tenant_name} expires in {days} day(s) "
+                    f"on {expires_at}. Activate your subscription to continue."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+
+            for uid in recipient_ids:
+                if await svc.is_email_enabled_for_type(uid, NotificationType.SUBSCRIPTION):
+                    await email_service.queue_email_notification(
+                        to="",
+                        template_name="subscription_expiring",
+                        context={
+                            "recipient_name": "",
+                            "tenant_name": tenant_name,
+                            "days": days,
+                            "expires_at": expires_at,
+                        },
+                        user_id=uid,
+                    )
+
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_trial_expiring_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.SUBSCRIPTION_EXPIRING)
+async def handle_subscription_expiring(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.email import email_service
+    from app.notifications.services import NotificationService
+
+    days = event.payload.get("days_remaining", 0)
+    tenant_name = event.payload.get("tenant_name", "")
+    expires_at = event.payload.get("expires_at", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SUBSCRIPTION,
+                priority=NotificationPriority.HIGH if days <= 3 else NotificationPriority.MEDIUM,
+                title=f"Subscription Expires in {days} Day(s)",
+                message=(
+                    f"Your subscription for {tenant_name} expires in {days} day(s) "
+                    f"on {expires_at}. Renew now to avoid service interruption."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+
+            for uid in recipient_ids:
+                if await svc.is_email_enabled_for_type(uid, NotificationType.SUBSCRIPTION):
+                    await email_service.queue_email_notification(
+                        to="",
+                        template_name="subscription_expiring",
+                        context={
+                            "recipient_name": "",
+                            "tenant_name": tenant_name,
+                            "days": days,
+                            "expires_at": expires_at,
+                        },
+                        user_id=uid,
+                    )
+
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_sub_expiring_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.SUBSCRIPTION_EXPIRED)
+async def handle_subscription_expired(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    tenant_name = event.payload.get("tenant_name", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SUBSCRIPTION,
+                priority=NotificationPriority.CRITICAL,
+                title="Subscription Expired",
+                message=(
+                    f"Your subscription for {tenant_name} has expired. "
+                    "Renew immediately to restore full access."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_sub_expired_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.PAYMENT_PROOF_SUBMITTED)
+async def handle_payment_proof_submitted(event: DomainEvent) -> None:
+    """Notify all super admins when a tenant submits a payment proof."""
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    tenant_name = event.payload.get("tenant_name", "")
+    amount = event.payload.get("amount", "")
+    currency = event.payload.get("currency", "USD")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            super_admin_ids = await _get_super_admin_ids(session)
+            if not super_admin_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=None,  # platform notification
+                type=NotificationType.SUBSCRIPTION,
+                priority=NotificationPriority.HIGH,
+                title="Payment Proof Submitted",
+                message=(
+                    f"{tenant_name} has submitted a payment proof of "
+                    f"{amount} {currency} for subscription renewal. Review required."
+                ),
+                user_ids=super_admin_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_payment_proof_submitted_error")
+
+
+
+@event_publisher.on(EventType.PAYMENT_PROOF_APPROVED)
+async def handle_payment_proof_approved(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.email import email_service
+    from app.notifications.services import NotificationService
+
+    tenant_name = event.payload.get("tenant_name", "")
+    amount = event.payload.get("amount", "")
+    currency = event.payload.get("currency", "USD")
+    expires_at = event.payload.get("expires_at", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SUBSCRIPTION,
+                priority=NotificationPriority.HIGH,
+                title="Payment Proof Approved",
+                message=(
+                    f"Your payment proof of {amount} {currency} has been approved. "
+                    f"Subscription active until {expires_at}."
+                ),
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+
+            for uid in recipient_ids:
+                if await svc.is_email_enabled_for_type(uid, NotificationType.SUBSCRIPTION):
+                    await email_service.queue_email_notification(
+                        to="",
+                        template_name="payment_proof_approved",
+                        context={
+                            "recipient_name": "",
+                            "tenant_name": tenant_name,
+                            "amount": amount,
+                            "currency": currency,
+                            "expires_at": expires_at,
+                        },
+                        user_id=uid,
+                    )
+
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_payment_proof_approved_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.SYNC_FAILED)
+async def handle_sync_failed(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    device_id = event.payload.get("device_id", "")
+    error = event.payload.get("error", "Unknown error")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SYSTEM,
+                priority=NotificationPriority.HIGH,
+                title="Sync Failed",
+                message=f"Offline sync failed for device {device_id}. Error: {error}",
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_sync_failed_error", tenant_id=str(event.tenant_id))
+
+
+
+@event_publisher.on(EventType.DEVICE_OFFLINE)
+async def handle_device_offline(event: DomainEvent) -> None:
+    from app.db.session import AsyncSessionLocal
+    from app.notifications.services import NotificationService
+
+    device_name = event.payload.get("device_name", "")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            if not recipient_ids:
+                return
+
+            svc = NotificationService(session)
+            await svc.notify_users(
+                tenant_id=event.tenant_id,
+                type=NotificationType.SYSTEM,
+                priority=NotificationPriority.MEDIUM,
+                title=f"Device Offline: {device_name}",
+                message=f"POS device '{device_name}' has gone offline.",
+                user_ids=recipient_ids,
+                metadata=event.payload,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("handle_device_offline_error", tenant_id=str(event.tenant_id))

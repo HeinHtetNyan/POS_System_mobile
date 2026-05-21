@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.subscriptions.models import (
+    PaymentProof,
+    SubscriptionHistory,
+    SubscriptionPlan,
+    TenantSubscription,
+)
+
+
+class SubscriptionPlanRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_id(self, plan_id: uuid.UUID) -> SubscriptionPlan | None:
+        stmt = (
+            select(SubscriptionPlan)
+            .options(selectinload(SubscriptionPlan.entitlements))
+            .where(SubscriptionPlan.id == plan_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_code(self, code: str) -> SubscriptionPlan | None:
+        stmt = (
+            select(SubscriptionPlan)
+            .where(SubscriptionPlan.code == code)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_all(
+        self,
+        offset: int = 0,
+        limit: int = 20,
+        include_inactive: bool = False,
+    ) -> tuple[list[SubscriptionPlan], int]:
+        stmt = (
+            select(SubscriptionPlan)
+            .options(selectinload(SubscriptionPlan.entitlements))
+        )
+        count_stmt = select(func.count()).select_from(SubscriptionPlan)
+        if not include_inactive:
+            stmt = stmt.where(SubscriptionPlan.is_active.is_(True))
+            count_stmt = count_stmt.where(SubscriptionPlan.is_active.is_(True))
+        stmt = stmt.order_by(SubscriptionPlan.sort_order, SubscriptionPlan.created_at)
+        stmt = stmt.offset(offset).limit(limit)
+        total_result = await self.session.execute(count_stmt)
+        total = total_result.scalar_one()
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total
+
+
+class TenantSubscriptionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    def _with_plan(self, stmt):  # type: ignore[no-untyped-def]
+        return stmt.options(
+            selectinload(TenantSubscription.plan).selectinload(SubscriptionPlan.entitlements)
+        )
+
+    async def get_by_tenant(self, tenant_id: uuid.UUID) -> TenantSubscription | None:
+        stmt = self._with_plan(
+            select(TenantSubscription).where(TenantSubscription.tenant_id == tenant_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_id(self, sub_id: uuid.UUID) -> TenantSubscription | None:
+        stmt = self._with_plan(
+            select(TenantSubscription).where(TenantSubscription.id == sub_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_expired(self, now: datetime) -> list[TenantSubscription]:
+        from app.core.constants import SubscriptionStatus
+
+        stmt = select(TenantSubscription).where(
+            TenantSubscription.status.in_([
+                SubscriptionStatus.ACTIVE,
+                SubscriptionStatus.TRIAL,
+            ]),
+            TenantSubscription.expires_at < now,
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+
+class SubscriptionHistoryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_tenant(
+        self, tenant_id: uuid.UUID, offset: int = 0, limit: int = 20
+    ) -> tuple[list[SubscriptionHistory], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(SubscriptionHistory)
+            .where(SubscriptionHistory.tenant_id == tenant_id)
+        )
+        stmt = (
+            select(SubscriptionHistory)
+            .where(SubscriptionHistory.tenant_id == tenant_id)
+            .order_by(SubscriptionHistory.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        total_result = await self.session.execute(count_stmt)
+        total = total_result.scalar_one()
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total
+
+
+class PaymentProofRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_id(self, proof_id: uuid.UUID) -> PaymentProof | None:
+        stmt = select(PaymentProof).where(PaymentProof.id == proof_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_tenant(
+        self, tenant_id: uuid.UUID, offset: int = 0, limit: int = 20
+    ) -> tuple[list[PaymentProof], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(PaymentProof)
+            .where(PaymentProof.tenant_id == tenant_id)
+        )
+        stmt = (
+            select(PaymentProof)
+            .where(PaymentProof.tenant_id == tenant_id)
+            .order_by(PaymentProof.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        total_result = await self.session.execute(count_stmt)
+        total = total_result.scalar_one()
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all()), total

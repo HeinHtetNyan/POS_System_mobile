@@ -64,3 +64,36 @@ class TokenError(AppBaseException):
 class BusinessRuleError(AppBaseException):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__(message=message, code="BUSINESS_RULE_ERROR", status_code=400, details=details)
+
+
+class SubscriptionExpiredException(AppBaseException):
+    def __init__(self, message: str = "Subscription has expired. Please renew to continue.") -> None:
+        super().__init__(message=message, code="SUBSCRIPTION_EXPIRED", status_code=402)
+
+
+class SubscriptionSuspendedException(AppBaseException):
+    def __init__(self, message: str = "Subscription is suspended. Contact support.") -> None:
+        super().__init__(message=message, code="SUBSCRIPTION_SUSPENDED", status_code=403)
+
+
+class FeatureDisabledException(AppBaseException):
+    def __init__(self, feature_code: str) -> None:
+        super().__init__(
+            message=f"Feature '{feature_code}' is not available on your current plan. Upgrade required.",
+            code="FEATURE_DISABLED",
+            status_code=403,
+            details={"feature_code": feature_code},
+        )
+
+
+class UsageLimitExceededException(AppBaseException):
+    def __init__(self, feature_code: str, current: int, allowed: int) -> None:
+        super().__init__(
+            message=(
+                f"{feature_code.replace('_', ' ').title()} limit exceeded. "
+                f"Current: {current}. Allowed: {allowed}. Upgrade required."
+            ),
+            code="USAGE_LIMIT_EXCEEDED",
+            status_code=402,
+            details={"feature_code": feature_code, "current": current, "allowed": allowed},
+        )

@@ -17,6 +17,7 @@ from app.core.logging import configure_logging, get_logger
 from app.db.redis import close_redis_pool, get_redis_pool
 from app.db.session import engine
 from app.events import handlers as _event_handlers  # noqa: F401 — registers handlers
+from app.notifications import handlers as _notification_handlers  # noqa: F401 — registers notification handlers
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.logging import RequestLoggingMiddleware

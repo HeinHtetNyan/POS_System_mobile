@@ -13,6 +13,7 @@ class ProductType(str, Enum):
 
 class StockMovementType(str, Enum):
     PURCHASE = "PURCHASE"
+    PURCHASE_RECEIPT = "PURCHASE_RECEIPT"
     SALE = "SALE"
     REFUND = "REFUND"
     TRANSFER_IN = "TRANSFER_IN"
@@ -27,6 +28,7 @@ class StockMovementType(str, Enum):
 # Movement types that INCREASE stock quantity
 STOCK_INBOUND_TYPES: frozenset[str] = frozenset({
     StockMovementType.PURCHASE,
+    StockMovementType.PURCHASE_RECEIPT,
     StockMovementType.REFUND,
     StockMovementType.TRANSFER_IN,
     StockMovementType.ADJUSTMENT_INCREASE,
@@ -72,6 +74,98 @@ class SupplierStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
     BLACKLISTED = "BLACKLISTED"
+
+
+class PurchaseOrderStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    APPROVED = "APPROVED"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED"
+    RECEIVED = "RECEIVED"
+    CANCELLED = "CANCELLED"
+
+
+class GoodsReceiptStatus(str, Enum):
+    RECEIVED = "RECEIVED"
+    VOIDED = "VOIDED"
+
+
+class SupplierPayableStatus(str, Enum):
+    OPEN = "OPEN"
+    PARTIAL = "PARTIAL"
+    PAID = "PAID"
+
+
+class SupplierPaymentStatus(str, Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    VOIDED = "VOIDED"
+
+
+class NotificationType(str, Enum):
+    SYSTEM = "SYSTEM"
+    INVENTORY = "INVENTORY"
+    PROCUREMENT = "PROCUREMENT"
+    CUSTOMER = "CUSTOMER"
+    SUBSCRIPTION = "SUBSCRIPTION"
+    SECURITY = "SECURITY"
+
+
+class NotificationPriority(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class NotificationChannel(str, Enum):
+    IN_APP = "IN_APP"
+    EMAIL = "EMAIL"
+
+
+class BillingCycle(str, Enum):
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
+
+
+class SubscriptionStatus(str, Enum):
+    TRIAL = "TRIAL"
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    SUSPENDED = "SUSPENDED"
+    CANCELLED = "CANCELLED"
+
+
+class SubscriptionChangeType(str, Enum):
+    TRIAL_STARTED = "TRIAL_STARTED"
+    ACTIVATED = "ACTIVATED"
+    RENEWED = "RENEWED"
+    UPGRADED = "UPGRADED"
+    DOWNGRADED = "DOWNGRADED"
+    EXPIRED = "EXPIRED"
+    SUSPENDED = "SUSPENDED"
+    CANCELLED = "CANCELLED"
+    EXTENDED = "EXTENDED"
+    PLAN_CHANGED = "PLAN_CHANGED"
+
+
+class PaymentProofStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class CustomerGender(str, Enum):
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    OTHER = "OTHER"
+
+
+class CustomerLedgerEntryType(str, Enum):
+    SALE_DEBT = "SALE_DEBT"        # Customer bought on credit — balance increases
+    PAYMENT = "PAYMENT"            # Customer pays off debt — balance decreases
+    REFUND_CREDIT = "REFUND_CREDIT"  # Store credits customer — balance decreases
+    ADJUSTMENT = "ADJUSTMENT"      # Manual correction (signed amount)
 
 
 class PriceType(str, Enum):
@@ -274,6 +368,15 @@ class AuditAction(str, Enum):
     SUPPLIER_UPDATED = "SUPPLIER_UPDATED"
     SUPPLIER_DELETED = "SUPPLIER_DELETED"
 
+    # Customer management
+    CUSTOMER_CREATED = "CUSTOMER_CREATED"
+    CUSTOMER_UPDATED = "CUSTOMER_UPDATED"
+    CUSTOMER_DELETED = "CUSTOMER_DELETED"
+    CUSTOMER_PAYMENT_RECORDED = "CUSTOMER_PAYMENT_RECORDED"
+    CUSTOMER_BALANCE_ADJUSTED = "CUSTOMER_BALANCE_ADJUSTED"
+    CUSTOMER_CONTACT_ADDED = "CUSTOMER_CONTACT_ADDED"
+    CUSTOMER_NOTE_ADDED = "CUSTOMER_NOTE_ADDED"
+
     # Sales / Orders
     ORDER_CREATED = "ORDER_CREATED"
     ORDER_COMPLETED = "ORDER_COMPLETED"
@@ -311,6 +414,53 @@ class AuditAction(str, Enum):
     SYNC_OPERATION_REPLAYED = "SYNC_OPERATION_REPLAYED"
     SYNC_OPERATION_FAILED = "SYNC_OPERATION_FAILED"
 
+    # Analytics (Phase 6)
+    DASHBOARD_VIEWED = "DASHBOARD_VIEWED"
+    SALES_REPORT_VIEWED = "SALES_REPORT_VIEWED"
+    INVENTORY_REPORT_VIEWED = "INVENTORY_REPORT_VIEWED"
+    FINANCIAL_REPORT_VIEWED = "FINANCIAL_REPORT_VIEWED"
+
+    # Procurement (Phase 7)
+    PURCHASE_ORDER_CREATED = "PURCHASE_ORDER_CREATED"
+    PURCHASE_ORDER_SUBMITTED = "PURCHASE_ORDER_SUBMITTED"
+    PURCHASE_ORDER_APPROVED = "PURCHASE_ORDER_APPROVED"
+    PURCHASE_ORDER_CANCELLED = "PURCHASE_ORDER_CANCELLED"
+    GOODS_RECEIPT_CREATED = "GOODS_RECEIPT_CREATED"
+    SUPPLIER_PAYMENT_RECORDED = "SUPPLIER_PAYMENT_RECORDED"
+    PAYABLE_CREATED = "PAYABLE_CREATED"
+
+    # Subscriptions (Phase 8)
+    SUBSCRIPTION_CREATED = "SUBSCRIPTION_CREATED"
+    SUBSCRIPTION_ACTIVATED = "SUBSCRIPTION_ACTIVATED"
+    SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED"
+    SUBSCRIPTION_UPGRADED = "SUBSCRIPTION_UPGRADED"
+    SUBSCRIPTION_DOWNGRADED = "SUBSCRIPTION_DOWNGRADED"
+    SUBSCRIPTION_CANCELLED = "SUBSCRIPTION_CANCELLED"
+    SUBSCRIPTION_SUSPENDED = "SUBSCRIPTION_SUSPENDED"
+    SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED"
+    PAYMENT_PROOF_SUBMITTED = "PAYMENT_PROOF_SUBMITTED"
+    PAYMENT_PROOF_APPROVED = "PAYMENT_PROOF_APPROVED"
+    PAYMENT_PROOF_REJECTED = "PAYMENT_PROOF_REJECTED"
+    PLAN_CREATED = "PLAN_CREATED"
+    PLAN_UPDATED = "PLAN_UPDATED"
+
+    # Subscriptions (Phase 9)
+    ENTITLEMENT_OVERRIDE_CREATED = "ENTITLEMENT_OVERRIDE_CREATED"
+    ENTITLEMENT_OVERRIDE_UPDATED = "ENTITLEMENT_OVERRIDE_UPDATED"
+    ENTITLEMENT_OVERRIDE_REMOVED = "ENTITLEMENT_OVERRIDE_REMOVED"
+    SUBSCRIPTION_EXTENDED = "SUBSCRIPTION_EXTENDED"
+    PLAN_CHANGED = "PLAN_CHANGED"
+    FEATURE_GATE_BLOCKED = "FEATURE_GATE_BLOCKED"
+    LIMIT_EXCEEDED = "LIMIT_EXCEEDED"
+
+    # Notifications (Phase 10)
+    NOTIFICATION_CREATED = "NOTIFICATION_CREATED"
+    NOTIFICATION_READ = "NOTIFICATION_READ"
+    NOTIFICATION_READ_ALL = "NOTIFICATION_READ_ALL"
+    NOTIFICATION_PREFERENCE_UPDATED = "NOTIFICATION_PREFERENCE_UPDATED"
+    EVENT_PUBLISHED = "EVENT_PUBLISHED"
+    EMAIL_NOTIFICATION_QUEUED = "EMAIL_NOTIFICATION_QUEUED"
+
 
 class PermissionScope(str, Enum):
     GLOBAL = "GLOBAL"
@@ -334,6 +484,11 @@ class EntityType(str, Enum):
     INVENTORY_ADJUSTMENT = "INVENTORY_ADJUSTMENT"
     INVENTORY_TRANSFER = "INVENTORY_TRANSFER"
     SUPPLIER = "SUPPLIER"
+    # Phase 5 — Customers
+    CUSTOMER = "CUSTOMER"
+    CUSTOMER_CONTACT = "CUSTOMER_CONTACT"
+    CUSTOMER_NOTE = "CUSTOMER_NOTE"
+    CUSTOMER_LEDGER = "CUSTOMER_LEDGER"
     # Phase 3
     ORDER = "ORDER"
     ORDER_ITEM = "ORDER_ITEM"
@@ -346,6 +501,24 @@ class EntityType(str, Enum):
     DEVICE = "DEVICE"
     SYNC_OPERATION = "SYNC_OPERATION"
     SYNC_CHECKPOINT = "SYNC_CHECKPOINT"
+    # Phase 6 — Analytics
+    ANALYTICS_REPORT = "ANALYTICS_REPORT"
+    # Phase 7 — Procurement
+    PURCHASE_ORDER = "PURCHASE_ORDER"
+    PURCHASE_ORDER_ITEM = "PURCHASE_ORDER_ITEM"
+    GOODS_RECEIPT = "GOODS_RECEIPT"
+    SUPPLIER_PAYABLE = "SUPPLIER_PAYABLE"
+    SUPPLIER_PAYMENT = "SUPPLIER_PAYMENT"
+    # Phase 8 — Subscriptions
+    SUBSCRIPTION_PLAN = "SUBSCRIPTION_PLAN"
+    TENANT_SUBSCRIPTION = "TENANT_SUBSCRIPTION"
+    SUBSCRIPTION_HISTORY = "SUBSCRIPTION_HISTORY"
+    PAYMENT_PROOF = "PAYMENT_PROOF"
+    # Phase 9 — Entitlement Overrides
+    ENTITLEMENT_OVERRIDE = "ENTITLEMENT_OVERRIDE"
+    # Phase 10 — Notifications
+    NOTIFICATION = "NOTIFICATION"
+    NOTIFICATION_PREFERENCE = "NOTIFICATION_PREFERENCE"
 
 
 # Permission codes
@@ -394,6 +567,14 @@ class Permission(str, Enum):
     SUPPLIER_VIEW = "supplier:view"
     SUPPLIER_MANAGE = "supplier:manage"
 
+    # Customer permissions
+    CUSTOMER_VIEW = "customer:view"
+    CUSTOMER_CREATE = "customer:create"
+    CUSTOMER_UPDATE = "customer:update"
+    CUSTOMER_DELETE = "customer:delete"
+    CUSTOMER_PAYMENT = "customer:payment"
+    CUSTOMER_ADJUST = "customer:adjust"
+
     # POS / Sales permissions
     POS_ACCESS = "pos:access"
     POS_SALE_CREATE = "pos:sale:create"
@@ -420,6 +601,37 @@ class Permission(str, Enum):
     REPORT_VIEW = "report:view"
     REPORT_PROFIT = "report:profit"
     REPORT_EXPORT = "report:export"
+
+    # Analytics permissions (Phase 6)
+    ANALYTICS_DASHBOARD = "analytics:dashboard:view"
+    ANALYTICS_SALES = "analytics:sales:view"
+    ANALYTICS_INVENTORY = "analytics:inventory:view"
+    ANALYTICS_FINANCIAL = "analytics:financial:view"
+
+    # Procurement permissions (Phase 7)
+    PROCUREMENT_VIEW = "procurement:view"
+    PROCUREMENT_CREATE = "procurement:create"
+    PROCUREMENT_APPROVE = "procurement:approve"
+    PROCUREMENT_RECEIVE = "procurement:receive"
+    PROCUREMENT_PAYABLES = "procurement:payables"
+    PROCUREMENT_PAYMENTS = "procurement:payments"
+
+    # Subscription permissions (Phase 8)
+    SUBSCRIPTION_VIEW = "subscriptions:view"
+    SUBSCRIPTION_MANAGE = "subscriptions:manage"
+    SUBSCRIPTION_PLANS_MANAGE = "subscriptions:plans:manage"
+    SUBSCRIPTION_APPROVE_PAYMENT = "subscriptions:approve_payment"
+
+    # Subscription admin permissions (Phase 9)
+    SUBSCRIPTION_OVERRIDE = "subscriptions:override"
+    SUBSCRIPTION_EXTEND = "subscriptions:extend"
+    SUBSCRIPTION_VIEW_ALL = "subscriptions:view_all"
+    SUBSCRIPTION_CHANGE_PLAN = "subscriptions:change_plan"
+
+    # Notification permissions (Phase 10)
+    NOTIFICATION_VIEW = "notifications:view"
+    NOTIFICATION_MANAGE = "notifications:manage"
+    NOTIFICATION_PREFERENCES = "notifications:preferences"
 
     # System permissions
     SYSTEM_ADMIN = "system:admin"
@@ -465,6 +677,12 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.INVENTORY_MOVEMENT_VIEW,
         Permission.SUPPLIER_VIEW,
         Permission.SUPPLIER_MANAGE,
+        Permission.CUSTOMER_VIEW,
+        Permission.CUSTOMER_CREATE,
+        Permission.CUSTOMER_UPDATE,
+        Permission.CUSTOMER_DELETE,
+        Permission.CUSTOMER_PAYMENT,
+        Permission.CUSTOMER_ADJUST,
         Permission.POS_ACCESS,
         Permission.POS_SALE_CREATE,
         Permission.POS_SALE_VOID,
@@ -480,11 +698,25 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.REPORT_VIEW,
         Permission.REPORT_PROFIT,
         Permission.REPORT_EXPORT,
+        Permission.ANALYTICS_DASHBOARD,
+        Permission.ANALYTICS_SALES,
+        Permission.ANALYTICS_INVENTORY,
+        Permission.ANALYTICS_FINANCIAL,
+        Permission.PROCUREMENT_VIEW,
+        Permission.PROCUREMENT_CREATE,
+        Permission.PROCUREMENT_APPROVE,
+        Permission.PROCUREMENT_RECEIVE,
+        Permission.PROCUREMENT_PAYABLES,
+        Permission.PROCUREMENT_PAYMENTS,
+        Permission.SUBSCRIPTION_VIEW,
+        Permission.SUBSCRIPTION_MANAGE,
         Permission.AUDIT_VIEW,
         Permission.DEVICE_VIEW,
         Permission.DEVICE_MANAGE,
         Permission.SYNC_PUSH,
         Permission.SYNC_PULL,
+        Permission.NOTIFICATION_VIEW,
+        Permission.NOTIFICATION_PREFERENCES,
     ],
     UserRole.MANAGER: [
         Permission.USER_VIEW,
@@ -503,6 +735,12 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.INVENTORY_TRANSFER,
         Permission.INVENTORY_MOVEMENT_VIEW,
         Permission.SUPPLIER_VIEW,
+        Permission.CUSTOMER_VIEW,
+        Permission.CUSTOMER_CREATE,
+        Permission.CUSTOMER_UPDATE,
+        Permission.CUSTOMER_DELETE,
+        Permission.CUSTOMER_PAYMENT,
+        Permission.CUSTOMER_ADJUST,
         Permission.POS_ACCESS,
         Permission.POS_SALE_CREATE,
         Permission.POS_SALE_VOID,
@@ -516,10 +754,23 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.CASHIER_CLOSE_SESSION,
         Permission.RECEIPTS_VIEW,
         Permission.REPORT_VIEW,
+        Permission.ANALYTICS_DASHBOARD,
+        Permission.ANALYTICS_SALES,
+        Permission.ANALYTICS_INVENTORY,
+        Permission.ANALYTICS_FINANCIAL,
+        Permission.PROCUREMENT_VIEW,
+        Permission.PROCUREMENT_CREATE,
+        Permission.PROCUREMENT_APPROVE,
+        Permission.PROCUREMENT_RECEIVE,
+        Permission.PROCUREMENT_PAYABLES,
+        Permission.PROCUREMENT_PAYMENTS,
+        Permission.SUBSCRIPTION_VIEW,
         Permission.DEVICE_VIEW,
         Permission.DEVICE_MANAGE,
         Permission.SYNC_PUSH,
         Permission.SYNC_PULL,
+        Permission.NOTIFICATION_VIEW,
+        Permission.NOTIFICATION_PREFERENCES,
     ],
     UserRole.CASHIER: [
         Permission.POS_ACCESS,
@@ -532,9 +783,17 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.RECEIPTS_VIEW,
         Permission.INVENTORY_VIEW,
         Permission.PRODUCT_VIEW,
+        Permission.CUSTOMER_VIEW,
+        Permission.CUSTOMER_CREATE,
+        Permission.CUSTOMER_UPDATE,
+        Permission.CUSTOMER_PAYMENT,
+        Permission.ANALYTICS_DASHBOARD,
+        Permission.PROCUREMENT_VIEW,
         Permission.DEVICE_VIEW,
         Permission.SYNC_PUSH,
         Permission.SYNC_PULL,
+        Permission.NOTIFICATION_VIEW,
+        Permission.NOTIFICATION_PREFERENCES,
     ],
     UserRole.INVENTORY_STAFF: [
         Permission.PRODUCT_VIEW,
@@ -546,6 +805,10 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
         Permission.INVENTORY_ADJUST,
         Permission.INVENTORY_MOVEMENT_VIEW,
         Permission.SUPPLIER_VIEW,
+        Permission.PROCUREMENT_VIEW,
+        Permission.PROCUREMENT_RECEIVE,
+        Permission.NOTIFICATION_VIEW,
+        Permission.NOTIFICATION_PREFERENCES,
     ],
 }
 

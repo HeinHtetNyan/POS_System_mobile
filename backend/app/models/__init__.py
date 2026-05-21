@@ -26,6 +26,8 @@ from app.models.inventory import (
     StockMovement,
 )
 from app.models.supplier import Supplier, SupplierContact
+# Phase 5 — Customers
+from app.customers.models import Customer, CustomerContact, CustomerCounter, CustomerLedger, CustomerNote
 # Phase 3 — Sales Engine
 from app.cashiers.models import CashierSession
 from app.sales.models import BranchCounter, Cart, CartItem, Order, OrderItem
@@ -34,6 +36,29 @@ from app.receipts.models import Receipt
 # Phase 4 — Offline Sync
 from app.devices.models import PosDevice
 from app.sync.models import SyncCheckpoint, SyncOperation
+# Phase 7 — Procurement
+from app.procurement.models import (
+    GRCounter,
+    GoodsReceipt,
+    GoodsReceiptItem,
+    POCounter,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    SupplierPayable,
+    SupplierPayment,
+)
+# Phase 8 — Subscriptions
+from app.subscriptions.models import (
+    PaymentProof,
+    PlanEntitlement,
+    SubscriptionHistory,
+    SubscriptionPlan,
+    TenantSubscription,
+)
+# Phase 9 — Entitlement Overrides
+from app.subscriptions.models import TenantEntitlementOverride
+# Phase 10 — Notifications
+from app.notifications.models import Notification, NotificationPreference, NotificationRecipient
 
 __all__ = [
     "AuditLog",
@@ -64,6 +89,12 @@ __all__ = [
     "InventoryTransferItem",
     "Supplier",
     "SupplierContact",
+    # Phase 5
+    "Customer",
+    "CustomerContact",
+    "CustomerCounter",
+    "CustomerNote",
+    "CustomerLedger",
     # Phase 3
     "CashierSession",
     "BranchCounter",
@@ -79,4 +110,25 @@ __all__ = [
     "PosDevice",
     "SyncCheckpoint",
     "SyncOperation",
+    # Phase 7
+    "POCounter",
+    "GRCounter",
+    "PurchaseOrder",
+    "PurchaseOrderItem",
+    "GoodsReceipt",
+    "GoodsReceiptItem",
+    "SupplierPayable",
+    "SupplierPayment",
+    # Phase 8
+    "SubscriptionPlan",
+    "PlanEntitlement",
+    "TenantSubscription",
+    "SubscriptionHistory",
+    "PaymentProof",
+    # Phase 9
+    "TenantEntitlementOverride",
+    # Phase 10
+    "Notification",
+    "NotificationRecipient",
+    "NotificationPreference",
 ]

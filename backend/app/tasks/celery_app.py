@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.tasks.notification_tasks",
         "app.tasks.inventory_tasks",
         "app.tasks.sync_tasks",
+        "app.notifications.tasks",
     ],
 )
 
@@ -51,5 +52,26 @@ celery_app.conf.update(
             "task": "app.tasks.sync_tasks.cleanup_stale_devices",
             "schedule": 86400,  # every 24 hours
         },
+        # Phase 10 — Notification scheduled checks (not yet active; uncomment to enable)
+        # "notifications-check-low-stock-hourly": {
+        #     "task": "app.notifications.tasks.check_low_stock",
+        #     "schedule": 3600,
+        # },
+        # "notifications-check-trial-expiring-daily": {
+        #     "task": "app.notifications.tasks.check_trial_expiring",
+        #     "schedule": 86400,
+        # },
+        # "notifications-check-subscription-expiring-daily": {
+        #     "task": "app.notifications.tasks.check_subscription_expiring",
+        #     "schedule": 86400,
+        # },
+        # "notifications-check-payables-overdue-daily": {
+        #     "task": "app.notifications.tasks.check_payables_overdue",
+        #     "schedule": 86400,
+        # },
+        # "notifications-cleanup-expired-daily": {
+        #     "task": "app.notifications.tasks.cleanup_expired_notifications",
+        #     "schedule": 86400,
+        # },
     },
 )

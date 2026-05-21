@@ -114,6 +114,20 @@ async def require_inventory_access(current_user: CurrentUser) -> User:
     return current_user
 
 
+async def require_cashier_or_above(current_user: CurrentUser) -> User:
+    """CASHIER, MANAGER, BUSINESS_OWNER, RESELLER, SUPER_ADMIN — all operational roles."""
+    allowed = {
+        UserRole.SUPER_ADMIN.value,
+        UserRole.RESELLER.value,
+        UserRole.BUSINESS_OWNER.value,
+        UserRole.MANAGER.value,
+        UserRole.CASHIER.value,
+    }
+    if current_user.role not in allowed:
+        raise AuthorizationError("Cashier or higher access required")
+    return current_user
+
+
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
