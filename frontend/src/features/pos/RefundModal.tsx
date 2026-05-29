@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { checkoutService, refundService } from '@/services/sales/sales.service'
 import { fmt, fmtDateTime } from '@/lib/utils'
@@ -21,6 +21,7 @@ interface Props {
 }
 
 export default function RefundModal({ onClose, onSuccess }: Props) {
+  const qc = useQueryClient()
   const [step, setStep]               = useState<'search' | 'items'>('search')
   const [orderNumber, setOrderNumber] = useState('')
   const [order, setOrder]             = useState<Order | null>(null)
@@ -117,6 +118,14 @@ export default function RefundModal({ onClose, onSuccess }: Props) {
     onSuccess: (refund) => {
       const label = refundMethod === 'REPLACEMENT' ? 'Replacement' : 'Refund'
       toast.success(`${label} ${refund.refund_number} processed`)
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      qc.invalidateQueries({ queryKey: ['financial-summary'] })
+      qc.invalidateQueries({ queryKey: ['financial-profit'] })
+      qc.invalidateQueries({ queryKey: ['sales-analytics'] })
+      // Refresh inventory so POS/Inventory screens show updated quantities
+      qc.invalidateQueries({ queryKey: ['inventory'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
       onSuccess?.()
       onClose()
     },

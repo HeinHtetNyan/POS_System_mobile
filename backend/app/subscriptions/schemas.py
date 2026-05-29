@@ -88,7 +88,7 @@ class TrialStatusResponse(BaseSchema):
     plan_name: str
     plan_code: str
     started_at: str
-    expires_at: str
+    expires_at: str | None
     days_remaining: int
     is_expired: bool
     usage: dict[str, dict]
@@ -155,7 +155,7 @@ class SubscriptionResponse(TimestampedSchema):
     plan_id: uuid.UUID
     status: str
     started_at: datetime
-    expires_at: datetime
+    expires_at: datetime | None
     cancelled_at: datetime | None
     trial_ends_at: datetime | None
     auto_renew: bool

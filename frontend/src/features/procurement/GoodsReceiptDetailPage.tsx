@@ -64,6 +64,10 @@ export default function GoodsReceiptDetailPage() {
                 <dd className="text-zinc-200">{fmtDate(receipt.receipt_date)}</dd>
               </div>
               <div className="flex justify-between">
+                <dt className="text-zinc-500">Received By</dt>
+                <dd className="text-zinc-200">{receipt.received_by_name ?? '—'}</dd>
+              </div>
+              <div className="flex justify-between">
                 <dt className="text-zinc-500">Created</dt>
                 <dd className="text-zinc-400">{fmtDateTime(receipt.created_at)}</dd>
               </div>

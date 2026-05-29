@@ -15,6 +15,13 @@ import { LabelPrintPreviewModal } from '@/components/hardware/PrintPreviewModal'
 import { RawScannerModal } from '@/components/hardware/RawScannerModal'
 import type { Product as BackendProduct } from '@/shared/types'
 
+function generateSKU(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let s = 'SKU-'
+  for (let i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length))
+  return s
+}
+
 interface ProductFormModalProps {
   product?: BackendProduct
   categories: { id: string; name: string }[]
@@ -27,8 +34,17 @@ interface ProductFormModalProps {
 function ProductFormModal({ product, categories, brands, onClose, onSaved }: ProductFormModalProps) {
   const isEdit = !!product
   const selectedBranch = useTenantStore(s => s.selectedBranch)
+
+  // For edit: fetch the branch-specific inventory to read the stored reorder_point
+  const { data: invData } = useQuery({
+    queryKey: ['inventory-product', selectedBranch?.id, product?.id],
+    queryFn: () => inventoryService.getBranchInventory(selectedBranch!.id, { product_id: product!.id, page_size: 1 }),
+    enabled: isEdit && !!selectedBranch?.id && !!product?.id,
+    staleTime: 0,
+  })
+
   const [form, setForm] = useState({
-    sku:           product?.sku           ?? '',
+    sku:           product?.sku           ?? generateSKU(),
     name:          product?.name          ?? '',
     description:   product?.description   ?? '',
     product_type:  'SIMPLE' as const,
@@ -44,6 +60,14 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
   const [saving, setSaving]         = useState(false)
   const [error,  setError]          = useState<string | null>(null)
   const [showScanner, setShowScanner] = useState(false)
+
+  // Sync reorder_point from BranchInventory once the fetch resolves
+  useEffect(() => {
+    const rp = invData?.items?.[0]?.reorder_point
+    if (rp != null) {
+      setForm(prev => ({ ...prev, reorder_point: String(Math.round(Number(rp))) }))
+    }
+  }, [invData])
 
   // USB/HID scanner: listen for rapid keystrokes when no input is focused
   const usbBuffer    = useRef('')
@@ -129,20 +153,41 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
         selling_price: form.selling_price,
         reorder_point: parseInt(form.reorder_point || '0', 10),
       }
+      const reorderPt = parseInt(form.reorder_point || '0', 10)
       if (isEdit) {
         await productsService.update(product.id, { ...payload, is_active: form.is_active })
+        // Persist reorder_point to BranchInventory for the selected branch
+        if (selectedBranch && reorderPt >= 0) {
+          try {
+            await inventoryService.setReorderLevels(selectedBranch.id, product.id, {
+              reorder_point: reorderPt,
+              reorder_quantity: 0,
+            })
+          } catch { /* non-fatal: BranchInventory may not exist yet for this branch */ }
+        }
         toast.success('Product updated')
       } else {
         const created = await productsService.create(payload)
         const qty = parseInt(form.initial_stock || '0', 10)
-        if (qty > 0 && selectedBranch) {
-          try {
-            await inventoryService.setOpeningStock({
-              branch_id: selectedBranch.id,
-              items: [{ product_id: created.id, quantity: String(qty), cost_price: form.cost_price }],
-            })
-          } catch {
-            toast.warning('Product created but initial stock could not be set — add it via Inventory.')
+        if (selectedBranch) {
+          if (qty > 0) {
+            try {
+              await inventoryService.setOpeningStock({
+                branch_id: selectedBranch.id,
+                items: [{ product_id: created.id, quantity: String(qty), cost_price: form.cost_price }],
+              })
+            } catch {
+              toast.warning('Product created but initial stock could not be set — add it via Inventory.')
+            }
+          }
+          // Always persist reorder_point (backend auto-creates BranchInventory if needed)
+          if (reorderPt > 0) {
+            try {
+              await inventoryService.setReorderLevels(selectedBranch.id, created.id, {
+                reorder_point: reorderPt,
+                reorder_quantity: 0,
+              })
+            } catch { /* non-fatal */ }
           }
         }
         toast.success('Product created')
@@ -195,9 +240,26 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
             {form.barcode ? `Scanned: ${form.barcode} — tap to re-scan` : 'Tap to scan barcode'}
           </button>
 
-          {/* SKU + Barcode — plain inputs, auto-filled by scan */}
+          {/* SKU — auto-generated (read-only), Barcode — editable / scan-filled */}
           <div className="grid grid-cols-2 gap-3">
-            <Input label="SKU *" value={form.sku} onChange={set('sku')} placeholder="auto-filled by scan" required />
+            <div>
+              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">SKU</label>
+              <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded-xl px-3 py-2.5">
+                <span className="font-mono text-sm text-amber-400 flex-1">{form.sku}</span>
+                {!isEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, sku: generateSKU() }))}
+                    className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                    title="Regenerate SKU"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
             <Input label="Barcode" value={form.barcode} onChange={set('barcode')} placeholder="auto-filled by scan" />
           </div>
 

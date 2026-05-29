@@ -39,10 +39,14 @@ class AnalyticsRepository:
         branch_id: uuid.UUID | None = None,
         cashier_user_id: uuid.UUID | None = None,
     ) -> list:
-        """Base filter list for completed orders scoped to tenant."""
+        """Base filter list for completed/refunded orders scoped to tenant."""
         f: list = [
             Order.tenant_id == tenant_id,
-            Order.order_status == OrderStatus.COMPLETED.value,
+            Order.order_status.in_([
+                OrderStatus.COMPLETED.value,
+                OrderStatus.PARTIALLY_REFUNDED.value,
+                OrderStatus.REFUNDED.value,
+            ]),
         ]
         if start_dt:
             f.append(Order.created_at >= start_dt)

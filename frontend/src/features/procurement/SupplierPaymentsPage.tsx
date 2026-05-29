@@ -161,12 +161,13 @@ function PayableRow({ payableId }: { payableId: string }) {
               ) : (
                 <div className="space-y-1">
                   {detail.payments.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 text-xs bg-zinc-800 rounded-lg px-3 py-2">
+                    <div key={p.id} className="flex items-center gap-3 text-xs bg-zinc-800 rounded-lg px-3 py-2 flex-wrap">
                       <span className="text-zinc-500">{fmtDate(p.payment_date)}</span>
                       <Badge size="xs" variant={p.status === 'CONFIRMED' ? 'success' : p.status === 'VOIDED' ? 'danger' : 'default'}>
                         {p.payment_method.replace('_', ' ')}
                       </Badge>
                       {p.reference_number && <span className="font-mono text-zinc-500">{p.reference_number}</span>}
+                      {p.recorded_by_name && <span className="text-zinc-600">by {p.recorded_by_name}</span>}
                       <span className="ml-auto font-mono font-semibold text-green-400">{fmt(p.amount)}</span>
                     </div>
                   ))}

@@ -68,7 +68,7 @@ export default function TrialExpiredPage() {
               </div>
               <div>
                 <p className="text-zinc-500 text-xs">Expired</p>
-                <p className="text-red-400 font-medium">{fmtDate(sub.expires_at)}</p>
+                <p className="text-red-400 font-medium">{sub.expires_at ? fmtDate(sub.expires_at) : '—'}</p>
               </div>
             </div>
           </div>

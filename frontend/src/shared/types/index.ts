@@ -165,6 +165,7 @@ export interface StockMovement {
   reason: string | null
   notes: string | null
   actor_user_id: string
+  actor_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -542,7 +543,7 @@ export interface Subscription {
   plan_id: string
   status: string
   started_at: string
-  expires_at: string
+  expires_at: string | null
   cancelled_at: string | null
   trial_ends_at: string | null
   auto_renew: boolean
@@ -1171,6 +1172,8 @@ export interface PurchaseOrderSummary {
   approved_by: string | null
   approved_at: string | null
   created_by: string
+  created_by_name?: string | null
+  approved_by_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -1223,6 +1226,7 @@ export interface GoodsReceiptSummary {
   receipt_date: string
   status: string
   received_by: string
+  received_by_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -1256,6 +1260,7 @@ export interface SupplierPayment {
   status: string
   notes: string | null
   recorded_by: string
+  recorded_by_name?: string | null
   created_at: string
   updated_at: string
 }

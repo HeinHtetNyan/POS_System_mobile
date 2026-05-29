@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """
 Transactional Checkout Engine
-==============================
 ALL-OR-NOTHING: every checkout operation runs inside a single database
 transaction. On any failure the entire transaction is rolled back, leaving
 inventory, orders, payments, and receipts in a consistent state.

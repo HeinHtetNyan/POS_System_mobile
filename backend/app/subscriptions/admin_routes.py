@@ -166,6 +166,39 @@ async def remove_override(
     return Response(status_code=204)
 
 
+@router.post("/tenants/{tenant_id}/cancel", response_model=SubscriptionResponse)
+async def admin_cancel_subscription(
+    tenant_id: uuid.UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_super_admin)],
+    request_id: RequestId,
+) -> SubscriptionResponse:
+    from app.subscriptions.services import SubscriptionService
+    svc = SubscriptionService(db)
+    sub = await svc.cancel_subscription(
+        tenant_id=tenant_id, actor_id=current_user.id, request_id=request_id
+    )
+    return SubscriptionResponse.model_validate(sub)
+
+
+@router.post("/tenants/{tenant_id}/reactivate", response_model=SubscriptionResponse)
+async def admin_reactivate_subscription(
+    tenant_id: uuid.UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_super_admin)],
+    request_id: RequestId,
+    extension_days: int = 30,
+) -> SubscriptionResponse:
+    svc = AdminSubscriptionService(db)
+    sub = await svc.reactivate_subscription(
+        tenant_id=tenant_id,
+        extension_days=extension_days,
+        actor_id=current_user.id,
+        request_id=request_id,
+    )
+    return SubscriptionResponse.model_validate(sub)
+
+
 @router.post("/tenants/{tenant_id}/suspend", response_model=SubscriptionResponse)
 async def admin_suspend_subscription(
     tenant_id: uuid.UUID,

@@ -3,6 +3,7 @@ import { cn } from '@/shared/utils'
 
 const TABS = [
   { to: '/app/subscription/current', label: 'Current Plan' },
+  { to: '/app/subscription/plans',   label: 'Plans'        },
   { to: '/app/subscription/billing', label: 'Billing History' },
 ]
 

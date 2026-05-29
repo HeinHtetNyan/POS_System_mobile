@@ -113,9 +113,12 @@ export default function StockHistoryModal({ item, branchId, productName, product
                   )}
                 </div>
 
-                {/* Date */}
+                {/* Date + Actor */}
                 <div className="flex-shrink-0 text-right">
                   <p className="text-[10px] text-zinc-600 whitespace-nowrap">{fmtDateTime(mv.created_at)}</p>
+                  {mv.actor_name && (
+                    <p className="text-[10px] text-zinc-500 whitespace-nowrap mt-0.5">by {mv.actor_name}</p>
+                  )}
                 </div>
               </div>
             )

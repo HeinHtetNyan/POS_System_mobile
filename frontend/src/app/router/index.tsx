@@ -42,6 +42,7 @@ const InventoryAnalyticsPage    = lazy(() => import('@/features/analytics/Invent
 const CustomerAnalyticsPage     = lazy(() => import('@/features/analytics/CustomerAnalyticsPage'))
 const FinancialAnalyticsPage    = lazy(() => import('@/features/analytics/FinancialAnalyticsPage'))
 const StaffAnalyticsPage        = lazy(() => import('@/features/analytics/StaffAnalyticsPage'))
+const ExportsPage               = lazy(() => import('@/features/analytics/ExportsPage'))
 const ProcurementLayout         = lazy(() => import('@/features/procurement/ProcurementLayout'))
 const ProcurementDashboardPage  = lazy(() => import('@/features/procurement/ProcurementDashboardPage'))
 const SuppliersPage             = lazy(() => import('@/features/procurement/SuppliersPage'))
@@ -60,6 +61,7 @@ const NotificationPreferencesPage = lazy(() => import('@/features/notifications/
 
 const SubscriptionLayout          = lazy(() => import('@/features/subscription/SubscriptionLayout'))
 const CurrentSubscriptionPage     = lazy(() => import('@/features/subscription/CurrentSubscriptionPage'))
+const SubscriptionPlansPage       = lazy(() => import('@/features/subscription/PlansPage'))
 const BillingHistoryPage          = lazy(() => import('@/features/subscription/BillingHistoryPage'))
 
 const SettingsLayout              = lazy(() => import('@/features/settings/SettingsLayout'))
@@ -246,7 +248,7 @@ export const router = createBrowserRouter([
                   { path: 'purchase-orders', element: S(PurchaseOrdersPage)        },
                   { path: 'receipts',        element: S(GoodsReceiptsPage)         },
                   { path: 'payables',        element: S(SupplierPayablesPage)      },
-                  { path: 'payments',        element: S(SupplierPaymentsPage)      },
+                  { path: 'payments',        element: <SectionGuard section="procurement-payments">{S(SupplierPaymentsPage)}</SectionGuard> },
                   { path: 'suppliers/new',              element: S(SupplierFormPage)          },
                   { path: 'suppliers/:id',              element: S(SupplierDetailPage)        },
                   { path: 'suppliers/:id/edit',         element: S(SupplierFormPage)          },
@@ -271,6 +273,7 @@ export const router = createBrowserRouter([
                   { path: 'customers', element: S(CustomerAnalyticsPage)  },
                   { path: 'financial', element: S(FinancialAnalyticsPage) },
                   { path: 'staff',     element: S(StaffAnalyticsPage)     },
+                  { path: 'exports',   element: S(ExportsPage)            },
                 ],
               },
             ],
@@ -293,6 +296,7 @@ export const router = createBrowserRouter([
                 element: S(SubscriptionLayout),
                 children: [
                   { path: 'current', element: S(CurrentSubscriptionPage) },
+                  { path: 'plans',   element: S(SubscriptionPlansPage)    },
                   { path: 'usage',   element: <Navigate to="/app/subscription/current" replace /> },
                   { path: 'billing', element: S(BillingHistoryPage)       },
                 ],

@@ -498,6 +498,7 @@ class ProductService:
             after_state=update_data,
             request_id=request_id,
         )
+        await self.session.refresh(product)
         return product
 
     async def delete_product(

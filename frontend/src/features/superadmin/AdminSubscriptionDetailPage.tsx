@@ -183,6 +183,18 @@ export default function AdminSubscriptionDetailPage() {
     enabled: !!tenantId && tab === 'proofs',
   })
 
+  const cancelMutation = useMutation({
+    mutationFn: () => subscriptionsService.adminCancel(tenantId!),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin', 'sub', tenantId] }); toast.success('Subscription deactivated') },
+    onError: err => toast.error(extractApiMsg(err) ?? 'Failed'),
+  })
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => subscriptionsService.adminReactivate(tenantId!),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin', 'sub', tenantId] }); toast.success('Subscription activated') },
+    onError: err => toast.error(extractApiMsg(err) ?? 'Failed'),
+  })
+
   const suspendMutation = useMutation({
     mutationFn: () => subscriptionsService.adminSuspend(tenantId!),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin', 'sub', tenantId] }); toast.success('Subscription suspended') },
@@ -220,6 +232,23 @@ export default function AdminSubscriptionDetailPage() {
           <div className="flex gap-2 flex-wrap justify-end">
             <Btn variant="secondary" size="sm" onClick={() => setModal('extend')}>Extend</Btn>
             <Btn variant="secondary" size="sm" onClick={() => setModal('change-plan')}>Change Plan</Btn>
+            {(sub.status === 'CANCELLED' || sub.status === 'EXPIRED') ? (
+              <Btn
+                variant="success" size="sm"
+                onClick={() => confirm('Reactivate this subscription? This will set it to ACTIVE and extend by 30 days.') && reactivateMutation.mutate()}
+                disabled={reactivateMutation.isPending}
+              >
+                {reactivateMutation.isPending ? 'Activating…' : 'Activate'}
+              </Btn>
+            ) : (
+              <Btn
+                variant="danger" size="sm"
+                onClick={() => confirm('Deactivate (cancel) this subscription?') && cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+              >
+                {cancelMutation.isPending ? 'Deactivating…' : 'Deactivate'}
+              </Btn>
+            )}
             {sub.status === 'ACTIVE' && (
               <Btn variant="danger" size="sm" onClick={() => confirm('Suspend this subscription?') && suspendMutation.mutate()} disabled={suspendMutation.isPending}>
                 Suspend
@@ -255,7 +284,7 @@ export default function AdminSubscriptionDetailPage() {
                     {[
                       { label: 'Status', value: <Badge variant={STATUS_VARIANT[sub.status] ?? 'default'} dot>{sub.status}</Badge> },
                       { label: 'Started', value: fmtDate(sub.started_at) },
-                      { label: 'Expires', value: fmtDate(sub.expires_at) },
+                      { label: 'Expires', value: sub.expires_at ? fmtDate(sub.expires_at) : 'Never' },
                       { label: 'Auto-Renew', value: sub.auto_renew ? 'Yes' : 'No' },
                       { label: 'Price', value: `${sub.plan.currency} ${Number(sub.plan.price).toFixed(2)}/${sub.plan.billing_cycle.toLowerCase()}` },
                       ...(sub.trial_ends_at ? [{ label: 'Trial Ends', value: fmtDate(sub.trial_ends_at) }] : []),

@@ -468,7 +468,7 @@ export default function CurrentSubscriptionPage() {
               </div>
               <div>
                 <p className="text-zinc-500 text-xs mb-0.5">Expires</p>
-                <p className="text-zinc-100">{fmtDate(sub.expires_at)}</p>
+                <p className="text-zinc-100">{sub.expires_at ? fmtDate(sub.expires_at) : 'Never'}</p>
               </div>
               {isTrial && sub.trial_ends_at && (
                 <div>

@@ -60,7 +60,7 @@ export default function InventoryScreen() {
   const outOfStock  = items.filter(i => parseFloat(i.quantity_on_hand) === 0).length
   const lowStock    = items.filter(i => {
     const qty = parseFloat(i.quantity_on_hand)
-    return qty > 0 && qty <= (i.reorder_point ?? 10)
+    return i.reorder_point != null && qty > 0 && qty <= i.reorder_point
   }).length
   const totalValue  = items.reduce((s, i) => s + parseFloat(i.quantity_on_hand), 0)
 
@@ -154,9 +154,9 @@ export default function InventoryScreen() {
                 ) : filtered.map(item => {
                   const available = parseFloat(item.quantity_available)
                   const sold      = parseFloat(item.quantity_sold ?? '0')
-                  const reorderPt = item.reorder_point ?? 10
+                  const reorderPt = item.reorder_point ?? 0
                   const isOut = available === 0
-                  const isLow = available > 0 && available <= reorderPt
+                  const isLow = reorderPt > 0 && available > 0 && available <= reorderPt
                   return (
                     <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors">
                       <Td>
@@ -220,6 +220,7 @@ export default function InventoryScreen() {
           onClose={() => setHistoryItem(null)}
         />
       )}
+
     </div>
   )
 }

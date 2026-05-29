@@ -79,6 +79,12 @@ export const subscriptionsService = {
   adminChangePlan: (tenantId: string, plan_id: string, reason?: string) =>
     apiClient.post<Subscription>(`/subscriptions/admin/tenants/${tenantId}/change-plan`, { plan_id, reason }).then(r => r.data),
 
+  adminCancel: (tenantId: string) =>
+    apiClient.post<Subscription>(`/subscriptions/admin/tenants/${tenantId}/cancel`).then(r => r.data),
+
+  adminReactivate: (tenantId: string, extension_days = 30) =>
+    apiClient.post<Subscription>(`/subscriptions/admin/tenants/${tenantId}/reactivate`, null, { params: { extension_days } }).then(r => r.data),
+
   adminSuspend: (tenantId: string) =>
     apiClient.post<Subscription>(`/subscriptions/admin/tenants/${tenantId}/suspend`).then(r => r.data),
 

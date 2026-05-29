@@ -83,6 +83,7 @@ _refund_access = require_roles(
     UserRole.SUPER_ADMIN,
     UserRole.BUSINESS_OWNER,
     UserRole.MANAGER,
+    UserRole.CASHIER,
 )
 _view_access = require_roles(
     UserRole.SUPER_ADMIN,

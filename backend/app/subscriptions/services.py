@@ -406,9 +406,18 @@ class SubscriptionService:
                 "Must be ACTIVE or EXPIRED."
             )
 
+        # Block renewal only for the actual Free plan (price=0, no expiry)
+        if sub.expires_at is None:
+            if sub.plan and sub.plan.price == 0 and sub.plan.trial_days == 0:
+                raise BusinessRuleError(
+                    "The Free plan does not expire and cannot be renewed. "
+                    "Upgrade to a paid plan instead."
+                )
+            # Paid plan with missing expiry (data inconsistency) — treat now as base
+
         now = _now()
         old_status = sub.status
-        base = sub.expires_at if sub.expires_at > now else now
+        base = sub.expires_at if (sub.expires_at is not None and sub.expires_at > now) else now
         sub.expires_at = _expires_at_for_cycle(sub.plan.billing_cycle, base)
         if sub.status == SubscriptionStatus.EXPIRED:
             sub.status = SubscriptionStatus.ACTIVE
@@ -692,26 +701,69 @@ class SubscriptionService:
         return await self.sub_repo.get_by_tenant(tenant_id)  # type: ignore[return-value]
 
     async def process_expired_subscriptions(self) -> int:
-        """Batch expire all ACTIVE/TRIAL subscriptions past their expires_at. Returns count."""
+        """Batch-downgrade expired subscriptions to Free; falls back to EXPIRED if no Free plan."""
         now = _now()
         expired = await self.sub_repo.get_expired(now)
+        free_plan = await self.plan_repo.get_trial_plan()
 
         for sub in expired:
             old_status = sub.status
-            sub.status = SubscriptionStatus.EXPIRED
-            self._add_history(
-                sub,
-                change_type=SubscriptionChangeType.EXPIRED,
-                old_status=old_status,
-                new_status=SubscriptionStatus.EXPIRED,
-            )
-            await self.audit.log(
-                action=AuditAction.SUBSCRIPTION_EXPIRED,
-                tenant_id=sub.tenant_id,
-                entity_type=EntityType.TENANT_SUBSCRIPTION,
-                entity_id=sub.id,
-                after_state={"previous_status": old_status},
-            )
+            old_plan_id = sub.plan_id
+            old_plan_name = sub.plan.name if sub.plan else "unknown"
+            old_plan_code = sub.plan.code if sub.plan else ""
+
+            if free_plan:
+                sub.plan_id = free_plan.id
+                sub.status = SubscriptionStatus.ACTIVE
+                sub.expires_at = None
+                sub.trial_ends_at = None
+
+                tenant = await self.session.get(Tenant, sub.tenant_id)
+                if tenant:
+                    tenant.status = TenantStatus.ACTIVE
+                    tenant.subscription_plan = free_plan.code
+                    tenant.subscription_expires_at = None
+
+                self._add_history(
+                    sub,
+                    change_type=SubscriptionChangeType.DOWNGRADED,
+                    old_plan_id=old_plan_id,
+                    new_plan_id=free_plan.id,
+                    old_status=old_status,
+                    new_status=SubscriptionStatus.ACTIVE,
+                    note=(
+                        f"Auto-downgraded to Free plan after '{old_plan_name}' "
+                        "subscription expired."
+                    ),
+                )
+                await self.audit.log(
+                    action=AuditAction.SUBSCRIPTION_DOWNGRADED,
+                    tenant_id=sub.tenant_id,
+                    entity_type=EntityType.TENANT_SUBSCRIPTION,
+                    entity_id=sub.id,
+                    after_state={
+                        "from_plan": old_plan_code,
+                        "to_plan": free_plan.code,
+                        "source": "auto_downgrade_on_expiry",
+                    },
+                )
+            else:
+                sub.status = SubscriptionStatus.EXPIRED
+                self._add_history(
+                    sub,
+                    change_type=SubscriptionChangeType.EXPIRED,
+                    old_plan_id=old_plan_id,
+                    old_status=old_status,
+                    new_status=SubscriptionStatus.EXPIRED,
+                    note="Auto-expired (no Free plan configured for downgrade).",
+                )
+                await self.audit.log(
+                    action=AuditAction.SUBSCRIPTION_EXPIRED,
+                    tenant_id=sub.tenant_id,
+                    entity_type=EntityType.TENANT_SUBSCRIPTION,
+                    entity_id=sub.id,
+                    after_state={"previous_status": old_status},
+                )
 
         await self.session.flush()
         return len(expired)
@@ -748,10 +800,16 @@ class TrialStatusService:
             raise NotFoundError("TenantSubscription", tenant_id)
 
         now = _now()
-        expires_at = sub.expires_at
-        delta = expires_at - now
-        days_remaining = max(0, delta.days)
-        is_expired = now >= expires_at
+        if sub.expires_at is not None:
+            delta = sub.expires_at - now
+            days_remaining = max(0, delta.days)
+            is_expired = now >= sub.expires_at
+            expires_at_str: str | None = sub.expires_at.isoformat()
+        else:
+            # Free plan — never expires
+            days_remaining = -1
+            is_expired = False
+            expires_at_str = None
 
         async def _count(model: Any, *filters: Any) -> int:
             stmt = select(func.count()).select_from(model).where(*filters)
@@ -775,7 +833,7 @@ class TrialStatusService:
             plan_name=sub.plan.name,
             plan_code=sub.plan.code,
             started_at=sub.started_at.isoformat(),
-            expires_at=sub.expires_at.isoformat(),
+            expires_at=expires_at_str,
             days_remaining=days_remaining,
             is_expired=is_expired,
             usage={

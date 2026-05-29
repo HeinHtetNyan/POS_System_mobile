@@ -54,6 +54,7 @@ class StockMovementResponse(TimestampedSchema):
     reason: str | None
     notes: str | None
     actor_user_id: uuid.UUID
+    actor_name: str | None = None
 
 
 # Opening Stock

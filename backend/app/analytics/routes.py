@@ -5,8 +5,10 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 
 from app.analytics.dashboard_service import DashboardService
+from app.analytics.export_service import ExportService
 from app.analytics.financial_reports import FinancialReportsService
 from app.analytics.inventory_reports import InventoryReportsService
 from app.analytics.sales_reports import SalesReportsService
@@ -429,3 +431,60 @@ async def get_profit_report(
         actor_id=current_user.id,
         request_id=request_id,
     )
+
+
+# CSV exports
+
+
+def _csv_response(data: bytes, filename: str) -> Response:
+    return Response(
+        content=data,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/export/sales-refunds",
+    dependencies=[check_reseller_access("analytics:financial:view")],
+)
+async def export_sales_refunds(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_manager_or_above)],
+    tenant_id: EffectiveTenantId,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None),
+) -> Response:
+    svc = ExportService(db)
+    data = await svc.export_sales_and_refunds(
+        tenant_id=tenant_id,
+        start_date=start_date,
+        end_date=end_date,
+        branch_id=branch_id,
+    )
+    period = f"{start_date or 'all'}_{end_date or 'all'}"
+    return _csv_response(data, f"sales_refunds_{period}.csv")
+
+
+@router.get(
+    "/export/orders",
+    dependencies=[check_reseller_access("analytics:sales:view")],
+)
+async def export_orders(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_manager_or_above)],
+    tenant_id: EffectiveTenantId,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    branch_id: uuid.UUID | None = Query(default=None),
+) -> Response:
+    svc = ExportService(db)
+    data = await svc.export_order_items(
+        tenant_id=tenant_id,
+        start_date=start_date,
+        end_date=end_date,
+        branch_id=branch_id,
+    )
+    period = f"{start_date or 'all'}_{end_date or 'all'}"
+    return _csv_response(data, f"orders_{period}.csv")

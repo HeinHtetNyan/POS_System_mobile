@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -97,10 +97,13 @@ class RefundRepository(BaseRepository[Refund]):
             filters.append(Refund.order_id == order_id)
         if cashier_user_id:
             filters.append(
-                Refund.order_id.in_(
-                    select(Order.id)
-                    .join(CashierSession, Order.cashier_session_id == CashierSession.id)
-                    .where(CashierSession.cashier_user_id == cashier_user_id)
+                or_(
+                    Refund.processed_by == cashier_user_id,
+                    Refund.order_id.in_(
+                        select(Order.id)
+                        .join(CashierSession, Order.cashier_session_id == CashierSession.id)
+                        .where(CashierSession.cashier_user_id == cashier_user_id)
+                    ),
                 )
             )
         return await self.get_all(

@@ -90,29 +90,22 @@ export default function StaffDashboardPage() {
 
         {/* KPI Row */}
         <DashboardSection title="Today at a Glance">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <KpiCard
-              label="Orders Today"
-              value={kpi?.orders_today ?? '—'}
-              sub="transactions"
-              icon="🧾"
-              isLoading={kpiQuery.isLoading}
-            />
-            <KpiCard
-              label="Sales Today"
-              value={fmt(kpi?.sales_today)}
-              icon="💰"
-              accent
-              isLoading={kpiQuery.isLoading}
-            />
-            <KpiCard
-              label="Notifications"
-              value={unread > 0 ? unread : '0'}
-              sub={unread > 0 ? 'unread' : 'all read'}
-              icon="🔔"
-              isLoading={notifQuery.isLoading}
-            />
-            {isInventoryStaff ? (
+          {isInventoryStaff ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <KpiCard
+                label="Orders Today"
+                value={kpi?.orders_today ?? '—'}
+                sub="transactions"
+                icon="🧾"
+                isLoading={kpiQuery.isLoading}
+              />
+              <KpiCard
+                label="Notifications"
+                value={unread > 0 ? unread : '0'}
+                sub={unread > 0 ? 'unread' : 'all read'}
+                icon="🔔"
+                isLoading={notifQuery.isLoading}
+              />
               <KpiCard
                 label="Low Stock"
                 value={lowStock.length}
@@ -120,7 +113,30 @@ export default function StaffDashboardPage() {
                 icon="⚠️"
                 isLoading={lowStockQuery.isLoading}
               />
-            ) : (
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <KpiCard
+                label="Orders Today"
+                value={kpi?.orders_today ?? '—'}
+                sub="transactions"
+                icon="🧾"
+                isLoading={kpiQuery.isLoading}
+              />
+              <KpiCard
+                label="Sales Today"
+                value={fmt(kpi?.sales_today)}
+                icon="💰"
+                accent
+                isLoading={kpiQuery.isLoading}
+              />
+              <KpiCard
+                label="Notifications"
+                value={unread > 0 ? unread : '0'}
+                sub={unread > 0 ? 'unread' : 'all read'}
+                icon="🔔"
+                isLoading={notifQuery.isLoading}
+              />
               <KpiCard
                 label="This Month"
                 value={fmt(kpi?.sales_this_month)}
@@ -128,8 +144,8 @@ export default function StaffDashboardPage() {
                 icon="📅"
                 isLoading={kpiQuery.isLoading}
               />
-            )}
-          </div>
+            </div>
+          )}
         </DashboardSection>
 
         {/* Quick Actions */}

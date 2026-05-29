@@ -73,6 +73,8 @@ class PurchaseOrderSummary(TimestampedSchema):
     approved_by: uuid.UUID | None
     approved_at: datetime | None
     created_by: uuid.UUID
+    created_by_name: str | None = None
+    approved_by_name: str | None = None
 
 
 class PurchaseOrderDetail(PurchaseOrderSummary):
@@ -121,6 +123,7 @@ class GoodsReceiptSummary(TimestampedSchema):
     receipt_date: datetime
     status: str
     received_by: uuid.UUID
+    received_by_name: str | None = None
 
 
 class GoodsReceiptDetail(GoodsReceiptSummary):
@@ -156,6 +159,7 @@ class SupplierPaymentResponse(TimestampedSchema):
     status: str
     notes: str | None
     recorded_by: uuid.UUID
+    recorded_by_name: str | None = None
 
 
 

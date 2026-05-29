@@ -87,6 +87,7 @@ export default function PurchaseOrdersPage() {
                   <Th right>Total</Th>
                   <Th>Order Date</Th>
                   <Th>Expected</Th>
+                  <Th>Created By</Th>
                   <Th />
                 </tr>
               </thead>
@@ -104,6 +105,7 @@ export default function PurchaseOrdersPage() {
                     <Td right><span className="font-mono">{fmt(po.total_amount)}</span></Td>
                     <Td muted>{fmtDate(po.order_date)}</Td>
                     <Td muted>{po.expected_date ? fmtDate(po.expected_date) : '—'}</Td>
+                    <Td muted>{po.created_by_name ?? '—'}</Td>
                     <Td>
                       <IconChevRight width="14" height="14" className="text-zinc-600" />
                     </Td>

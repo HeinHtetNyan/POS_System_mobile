@@ -205,6 +205,7 @@ export default function BranchesSettingsPage() {
   const user = useAuthStore(s => s.user)
   const qc = useQueryClient()
   const tenantId = user?.tenant_id
+  const canEdit = user?.role === 'BUSINESS_OWNER' || user?.role === 'SUPER_ADMIN'
   const [showAdd, setShowAdd] = useState(false)
   const [editBranch, setEditBranch] = useState<Branch | null>(null)
 
@@ -266,9 +267,9 @@ export default function BranchesSettingsPage() {
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-zinc-500">
               Activate or deactivate branches. Deactivated branches cannot process sales.
-              {!canAddBranch && ' Contact your administrator to register additional branches.'}
+              {canEdit && !canAddBranch && ' Contact your administrator to register additional branches.'}
             </p>
-            {canAddBranch && (
+            {canEdit && canAddBranch && (
               <Btn size="sm" onClick={() => setShowAdd(true)} className="flex-shrink-0">
                 + Add Branch
               </Btn>
@@ -312,9 +313,10 @@ export default function BranchesSettingsPage() {
                     {/* Edit button */}
                     {!isClosed && (
                       <button
-                        onClick={() => setEditBranch(branch)}
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors flex-shrink-0"
-                        title="Edit branch"
+                        onClick={() => canEdit && setEditBranch(branch)}
+                        disabled={!canEdit}
+                        className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${canEdit ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-700 cursor-not-allowed opacity-50'}`}
+                        title={canEdit ? 'Edit branch' : 'Owner access required'}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -328,8 +330,8 @@ export default function BranchesSettingsPage() {
                       <Btn
                         size="xs"
                         variant={isActive ? 'danger' : 'secondary'}
-                        disabled={statusMutation.isPending}
-                        onClick={() => statusMutation.mutate({
+                        disabled={!canEdit || statusMutation.isPending}
+                        onClick={() => canEdit && statusMutation.mutate({
                           branchId: branch.id,
                           status:   isActive ? 'INACTIVE' : 'ACTIVE',
                         })}
@@ -343,6 +345,12 @@ export default function BranchesSettingsPage() {
             </div>
           )}
         </div>
+
+        {!canEdit && (
+          <p className="text-xs text-zinc-600 text-center">
+            You have read-only access to branch settings.
+          </p>
+        )}
       </div>
     </>
   )

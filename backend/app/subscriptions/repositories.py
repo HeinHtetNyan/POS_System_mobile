@@ -127,6 +127,7 @@ class TenantSubscriptionRepository:
         window_end = now + timedelta(days=days)
         stmt = select(TenantSubscription).where(
             TenantSubscription.status == SubscriptionStatus.TRIAL,
+            TenantSubscription.expires_at.is_not(None),
             TenantSubscription.expires_at >= window_start,
             TenantSubscription.expires_at < window_end,
         )
@@ -136,12 +137,15 @@ class TenantSubscriptionRepository:
     async def get_expired(self, now: datetime) -> list[TenantSubscription]:
         from app.core.constants import SubscriptionStatus
 
-        stmt = select(TenantSubscription).where(
-            TenantSubscription.status.in_([
-                SubscriptionStatus.ACTIVE,
-                SubscriptionStatus.TRIAL,
-            ]),
-            TenantSubscription.expires_at < now,
+        stmt = self._with_plan(
+            select(TenantSubscription).where(
+                TenantSubscription.status.in_([
+                    SubscriptionStatus.ACTIVE,
+                    SubscriptionStatus.TRIAL,
+                ]),
+                TenantSubscription.expires_at.is_not(None),
+                TenantSubscription.expires_at < now,
+            )
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

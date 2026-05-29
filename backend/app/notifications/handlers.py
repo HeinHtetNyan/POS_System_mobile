@@ -37,6 +37,44 @@ async def _get_tenant_user_ids(session, tenant_id) -> list:  # type: ignore[no-u
     return list(result.scalars().all())
 
 
+async def _get_inventory_alert_ids(session, tenant_id) -> list:  # type: ignore[no-untyped-def]
+    """Return active user IDs for inventory alerts: owner + manager + inventory staff."""
+    from sqlalchemy import select
+
+    from app.core.constants import UserRole, UserStatus
+    from app.models.user import User
+
+    result = await session.execute(
+        select(User.id).where(
+            User.tenant_id == tenant_id,
+            User.status == UserStatus.ACTIVE,
+            User.role.in_([
+                UserRole.BUSINESS_OWNER.value,
+                UserRole.MANAGER.value,
+                UserRole.INVENTORY_STAFF.value,
+            ]),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _get_tenant_owner_ids(session, tenant_id) -> list:  # type: ignore[no-untyped-def]
+    """Return active BUSINESS_OWNER user IDs for a tenant (plan changes — owner only)."""
+    from sqlalchemy import select
+
+    from app.core.constants import UserRole, UserStatus
+    from app.models.user import User
+
+    result = await session.execute(
+        select(User.id).where(
+            User.tenant_id == tenant_id,
+            User.status == UserStatus.ACTIVE,
+            User.role == UserRole.BUSINESS_OWNER.value,
+        )
+    )
+    return list(result.scalars().all())
+
+
 async def _get_super_admin_ids(session) -> list:  # type: ignore[no-untyped-def]
     from sqlalchemy import select
 
@@ -66,7 +104,7 @@ async def handle_low_stock(event: DomainEvent) -> None:
 
     async with AsyncSessionLocal() as session:
         try:
-            recipient_ids = await _get_tenant_user_ids(session, event.tenant_id)
+            recipient_ids = await _get_inventory_alert_ids(session, event.tenant_id)
             if not recipient_ids:
                 return
 
@@ -670,17 +708,17 @@ async def handle_subscription_upgraded(event: DomainEvent) -> None:
                     metadata=event.payload,
                 )
 
-            # Notify the tenant's own owners/managers
+            # Notify the tenant's business owner only (not managers)
             if event.tenant_id:
-                tenant_user_ids = await _get_tenant_user_ids(session, event.tenant_id)
-                if tenant_user_ids:
+                owner_ids = await _get_tenant_owner_ids(session, event.tenant_id)
+                if owner_ids:
                     await svc.notify_users(
                         tenant_id=event.tenant_id,
                         type=NotificationType.SUBSCRIPTION,
                         priority=NotificationPriority.HIGH,
                         title="Plan Upgraded",
                         message=f"Your plan has been upgraded from '{old_plan}' to '{new_plan}'.",
-                        user_ids=tenant_user_ids,
+                        user_ids=owner_ids,
                         metadata=event.payload,
                     )
 
@@ -723,17 +761,17 @@ async def handle_subscription_downgraded(event: DomainEvent) -> None:
                     metadata=event.payload,
                 )
 
-            # Notify the tenant's own owners/managers
+            # Notify the tenant's business owner only (not managers)
             if event.tenant_id:
-                tenant_user_ids = await _get_tenant_user_ids(session, event.tenant_id)
-                if tenant_user_ids:
+                owner_ids = await _get_tenant_owner_ids(session, event.tenant_id)
+                if owner_ids:
                     await svc.notify_users(
                         tenant_id=event.tenant_id,
                         type=NotificationType.SUBSCRIPTION,
                         priority=NotificationPriority.MEDIUM,
                         title="Plan Downgraded",
                         message=f"Your plan has been downgraded from '{old_plan}' to '{new_plan}'.",
-                        user_ids=tenant_user_ids,
+                        user_ids=owner_ids,
                         metadata=event.payload,
                     )
 

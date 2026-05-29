@@ -118,6 +118,10 @@ class RegistrationService:
                 "No active trial plan configured. Please contact support."
             )
 
+        # True when the default plan is the permanent Free tier (price=0, no trial days).
+        # False when it is a time-limited trial that will expire.
+        is_free_plan = trial_plan.price == 0 and trial_plan.trial_days == 0
+
         # slug generation
         base_slug = _slug(data.business_name)
         slug = base_slug
@@ -137,7 +141,7 @@ class RegistrationService:
                 name=data.business_name,
                 slug=slug,
                 business_code=business_code,
-                status=TenantStatus.TRIAL,
+                status=TenantStatus.ACTIVE if is_free_plan else TenantStatus.TRIAL,
                 email=data.email,
                 phone=data.phone,
             )
@@ -177,16 +181,36 @@ class RegistrationService:
             user.primary_branch_id = branch.id
 
             now = _now()
-            trial_days = trial_plan.trial_days if trial_plan.trial_days > 0 else 14
-            trial_ends_at = now + timedelta(days=trial_days)
+            if is_free_plan:
+                fallback_trial_days = 14          # used only if referral upgrades to a trial plan
+                sub_status = SubscriptionStatus.ACTIVE
+                sub_expires_at = None
+                sub_trial_ends_at = None
+                history_change_type = SubscriptionChangeType.ACTIVATED
+                history_note = "Free plan assigned via self-service registration."
+            else:
+                fallback_trial_days = trial_plan.trial_days if trial_plan.trial_days > 0 else 14
+                trial_end = now + timedelta(days=fallback_trial_days)
+                sub_status = SubscriptionStatus.TRIAL
+                sub_expires_at = trial_end
+                sub_trial_ends_at = trial_end
+                history_change_type = SubscriptionChangeType.TRIAL_STARTED
+                history_note = (
+                    f"Trial started via self-service registration. "
+                    f"Expires {trial_end.date()}."
+                )
+
+            # Keep denormalised tenant fields in sync
+            tenant.subscription_plan = trial_plan.code
+            tenant.subscription_expires_at = sub_expires_at
 
             sub = TenantSubscription(
                 tenant_id=tenant.id,
                 plan_id=trial_plan.id,
-                status=SubscriptionStatus.TRIAL,
+                status=sub_status,
                 started_at=now,
-                expires_at=trial_ends_at,
-                trial_ends_at=trial_ends_at,
+                expires_at=sub_expires_at,
+                trial_ends_at=sub_trial_ends_at,
                 auto_renew=True,
             )
             self.session.add(sub)
@@ -196,10 +220,10 @@ class RegistrationService:
             history = SubscriptionHistory(
                 tenant_id=tenant.id,
                 subscription_id=sub.id,
-                change_type=SubscriptionChangeType.TRIAL_STARTED,
+                change_type=history_change_type,
                 new_plan_id=trial_plan.id,
-                new_status=SubscriptionStatus.TRIAL,
-                note=f"Trial started via self-service registration. Expires {trial_ends_at.date()}.",
+                new_status=sub_status,
+                note=history_note,
                 changed_by_user_id=user.id,
             )
             self.session.add(history)
@@ -241,10 +265,12 @@ class RegistrationService:
             entity_type=EntityType.TENANT_SUBSCRIPTION,
             entity_id=sub.id,
             after_state={
-                "status": SubscriptionStatus.TRIAL,
+                "status": sub_status,
                 "plan_id": str(trial_plan.id),
-                "trial_days": trial_days,
-                "expires_at": trial_ends_at.isoformat(),
+                "plan_code": trial_plan.code,
+                "is_free_plan": is_free_plan,
+                "trial_days": 0 if is_free_plan else fallback_trial_days,
+                "expires_at": sub_expires_at.isoformat() if sub_expires_at else None,
             },
             ip_address=ip_address,
             request_id=request_id,
@@ -267,10 +293,16 @@ class RegistrationService:
                 # Try to upgrade to referral (promo) plan
                 referral_plan = await self.plan_repo.get_referral_plan()
                 if referral_plan and referral_plan.id != trial_plan.id:
+                    promo_days = (
+                        referral_plan.trial_days
+                        if referral_plan.trial_days > 0
+                        else fallback_trial_days
+                    )
+                    promo_end = _now() + timedelta(days=promo_days)
                     sub.plan_id = referral_plan.id
-                    promo_days = referral_plan.trial_days if referral_plan.trial_days > 0 else trial_days
-                    sub.trial_ends_at = _now() + timedelta(days=promo_days)
-                    sub.expires_at = sub.trial_ends_at
+                    sub.status = SubscriptionStatus.TRIAL
+                    sub.trial_ends_at = promo_end
+                    sub.expires_at = promo_end
                     await self.session.flush()
             except Exception as exc:
                 logger.warning(
@@ -280,28 +312,40 @@ class RegistrationService:
                     error=str(exc),
                 )
 
-        # trial start notification
+        # welcome notification
         try:
             from app.notifications.services import NotificationService
             notif_svc = NotificationService(self.session)
+            if is_free_plan:
+                notif_title = f"Welcome to {trial_plan.name}!"
+                notif_message = (
+                    f"Welcome to NexusPOS, {data.first_name}! "
+                    f"You're on the {trial_plan.name} plan. "
+                    "Complete your setup and upgrade anytime to unlock more features."
+                )
+                notif_meta: dict = {"plan_code": trial_plan.code, "event": "free_plan_assigned"}
+            else:
+                notif_title = f"Welcome! Your {fallback_trial_days}-day trial has started"
+                notif_message = (
+                    f"Welcome to NexusPOS, {data.first_name}! "
+                    f"Your free trial of {trial_plan.name} starts today and expires on "
+                    f"{sub_expires_at.strftime('%B %d, %Y')}. "  # type: ignore[union-attr]
+                    "Complete your setup to get the most out of your trial."
+                )
+                notif_meta = {
+                    "plan_code": trial_plan.code,
+                    "trial_days": fallback_trial_days,
+                    "expires_at": sub_expires_at.isoformat(),  # type: ignore[union-attr]
+                    "event": "trial_started",
+                }
             await notif_svc.create_notification(
                 tenant_id=tenant.id,
                 type=NotificationType.SUBSCRIPTION,
                 priority=NotificationPriority.MEDIUM,
-                title=f"Welcome! Your {trial_days}-day trial has started",
-                message=(
-                    f"Welcome to NexusPOS, {data.first_name}! "
-                    f"Your free trial of {trial_plan.name} starts today and expires on "
-                    f"{trial_ends_at.strftime('%B %d, %Y')}. "
-                    "Complete your setup to get the most out of your trial."
-                ),
+                title=notif_title,
+                message=notif_message,
                 recipient_ids=[user.id],
-                metadata={
-                    "plan_code": trial_plan.code,
-                    "trial_days": trial_days,
-                    "expires_at": trial_ends_at.isoformat(),
-                    "event": "trial_started",
-                },
+                metadata=notif_meta,
             )
         except Exception as exc:
             logger.warning("trial_start_notification_failed", error=str(exc), tenant_id=str(tenant.id))
@@ -320,7 +364,7 @@ class RegistrationService:
                     "owner_name": f"{data.first_name} {data.last_name}",
                     "owner_email": data.email,
                     "plan_name": trial_plan.name,
-                    "trial_days": trial_days,
+                    "trial_days": 0 if is_free_plan else fallback_trial_days,
                 },
             ))
         except Exception as exc:

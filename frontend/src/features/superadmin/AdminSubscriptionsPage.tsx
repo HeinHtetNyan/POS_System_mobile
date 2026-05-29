@@ -294,7 +294,7 @@ export default function AdminSubscriptionsPage() {
                         <p className="text-sm font-medium text-zinc-100 truncate">
                           Tenant: <span className="font-mono text-xs text-zinc-400">{sub.tenant_id.slice(0, 8)}…</span>
                         </p>
-                        <p className="text-xs text-zinc-500 mt-0.5">{sub.plan.name} · expires {fmtDate(sub.expires_at)}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">{sub.plan.name} · expires {sub.expires_at ? fmtDate(sub.expires_at) : 'Never'}</p>
                       </div>
                       <Badge variant={STATUS_VARIANT[sub.status] ?? 'default'} dot>{sub.status}</Badge>
                     </div>

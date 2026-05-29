@@ -47,6 +47,7 @@ export default function GoodsReceiptsPage() {
                   <Th>Status</Th>
                   <Th>PO Reference</Th>
                   <Th>Receipt Date</Th>
+                  <Th>Received By</Th>
                   <Th>Created</Th>
                   <Th />
                 </tr>
@@ -72,6 +73,7 @@ export default function GoodsReceiptsPage() {
                     </Td>
                     <Td muted mono>{r.purchase_order_id.slice(0, 8)}…</Td>
                     <Td muted>{fmtDate(r.receipt_date)}</Td>
+                    <Td muted>{r.received_by_name ?? '—'}</Td>
                     <Td muted>{timeAgo(r.created_at)}</Td>
                     <Td>
                       <IconChevRight width="14" height="14" className="text-zinc-600" />
