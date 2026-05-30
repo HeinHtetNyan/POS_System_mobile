@@ -8,11 +8,8 @@ const DEFAULT_IGNORE_WHEN = ['INPUT', 'TEXTAREA', 'SELECT']
 
 interface ScannerInputCaptureProps {
   onScan: (code: string) => void
-  // Minimum characters to trigger scan (ignore stray keypresses)
   minLength?: number
-  // Max milliseconds between consecutive chars to consider it a scanner
   maxCharGap?: number
-  // Ignore input when these element types are focused (user is typing)
   ignoreWhen?: string[]
   enabled?: boolean
 }
@@ -32,11 +29,8 @@ export function ScannerInputCapture({
     if (!enabled) return
 
     function handleKeyDown(e: KeyboardEvent) {
-      // Ignore if focused on a text input (user is typing manually)
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? ''
       if (ignoreWhen.includes(tag)) return
-
-      // Ignore modifier-only keys
       if (e.ctrlKey || e.altKey || e.metaKey) return
 
       const now = Date.now()
@@ -46,32 +40,23 @@ export function ScannerInputCapture({
         bufferRef.current = ''
         lastTimeRef.current = 0
         if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-        if (code.length >= minLength) {
-          onScan(code)
-        }
+        if (code.length >= minLength) onScan(code)
         return
       }
 
-      // Single printable character
       if (e.key.length === 1) {
         const gap = now - lastTimeRef.current
-        if (lastTimeRef.current > 0 && gap > maxCharGap) {
-          // Gap too large — likely a manual keystroke, reset buffer
-          bufferRef.current = ''
-        }
+        if (lastTimeRef.current > 0 && gap > maxCharGap) bufferRef.current = ''
         bufferRef.current += e.key
         lastTimeRef.current = now
 
-        // Auto-flush after 200ms with no further input (some scanners don't send Enter)
         if (timerRef.current) clearTimeout(timerRef.current)
         timerRef.current = setTimeout(() => {
           const code = bufferRef.current.trim()
           bufferRef.current = ''
           lastTimeRef.current = 0
           timerRef.current = null
-          if (code.length >= minLength) {
-            onScan(code)
-          }
+          if (code.length >= minLength) onScan(code)
         }, 200)
       }
     }

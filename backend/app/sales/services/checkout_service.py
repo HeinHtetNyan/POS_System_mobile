@@ -226,7 +226,7 @@ class CheckoutService:
         # 4. Compute order totals
         totals = _compute_order_totals(data.items, data.order_discount_amount)
         total_amount = totals["total_amount"]
-        amount_paid = sum(p.amount for p in data.payments).quantize(Decimal("0.0001"))
+        amount_paid = sum((p.amount for p in data.payments), Decimal("0")).quantize(Decimal("0.0001"))
 
         # 5. Generate order number (uses locked counter row)
         branch_code = str(branch_id).replace("-", "")[:8].upper()

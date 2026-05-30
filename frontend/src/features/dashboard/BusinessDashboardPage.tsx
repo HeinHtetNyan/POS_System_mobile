@@ -74,7 +74,7 @@ export default function BusinessDashboardPage() {
     ? 'All Branches'
     : availableBranches.find(b => b.id === dashBranchId)?.name ?? selectedBranch?.name
 
-  const [kpiQuery, notifsQuery, ordersQuery, lowStockQuery, procQuery] = useQueries({
+  const [kpiQuery, notifsQuery, ordersQuery, lowStockQuery, procApprovedQuery, procPartialQuery] = useQueries({
     queries: [
       {
         queryKey: ['analytics', 'dashboard', effectiveBranchId],
@@ -93,12 +93,24 @@ export default function BusinessDashboardPage() {
         queryFn: () => analyticsService.getLowStock({ branch_id: effectiveBranchId }),
       },
       {
-        queryKey: ['procurement', 'orders', { status: 'PENDING' }],
-        queryFn: () => procurementService.listOrders({ status: 'PENDING', page: 1, page_size: 5 }),
+        queryKey: ['procurement', 'orders', { status: 'APPROVED' }],
+        queryFn: () => procurementService.listOrders({ status: 'APPROVED', page: 1, page_size: 5 }),
+        enabled: canProcure,
+      },
+      {
+        queryKey: ['procurement', 'orders', { status: 'PARTIALLY_RECEIVED' }],
+        queryFn: () => procurementService.listOrders({ status: 'PARTIALLY_RECEIVED', page: 1, page_size: 5 }),
         enabled: canProcure,
       },
     ],
   })
+
+  const pendingPOsTotal   = (procApprovedQuery.data?.total ?? 0) + (procPartialQuery.data?.total ?? 0)
+  const pendingPOsLoading = procApprovedQuery.isLoading || procPartialQuery.isLoading
+  const pendingPOsItems   = [
+    ...(procApprovedQuery.data?.items ?? []),
+    ...(procPartialQuery.data?.items ?? []),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5)
 
   const kpi = kpiQuery.data
   const kpiLoading = kpiQuery.isLoading
@@ -121,7 +133,7 @@ export default function BusinessDashboardPage() {
     onClick: () => navigate(`/app/notifications/${n.id}`),
   }))
 
-  const pendingPOs: ActivityItem[] = (procQuery.data?.items ?? []).map(po => ({
+  const pendingPOs: ActivityItem[] = pendingPOsItems.map(po => ({
     id: po.id,
     label: `PO ${po.po_number}`,
     sub: `${po.supplier_id.slice(-8)} · ${fmt(po.total_amount)}`,
@@ -237,10 +249,16 @@ export default function BusinessDashboardPage() {
           {canProcure && (
             <KpiCard
               label="Pending POs"
-              value={procQuery.data?.total ?? 0}
-              sub="purchase orders"
+              value={pendingPOsTotal}
+              sub={
+                <span className="flex gap-3 mt-0.5">
+                  <span>Ordered <strong className="text-zinc-300">{procApprovedQuery.data?.total ?? 0}</strong></span>
+                  <span>·</span>
+                  <span>Partial <strong className="text-zinc-300">{procPartialQuery.data?.total ?? 0}</strong></span>
+                </span>
+              }
               icon="🛒"
-              isLoading={procQuery.isLoading}
+              isLoading={pendingPOsLoading}
             />
           )}
           <KpiCard
@@ -339,14 +357,14 @@ export default function BusinessDashboardPage() {
         )}
 
         {/* Pending Procurement Activity */}
-        {canProcure && (pendingPOs.length > 0 || procQuery.isLoading) && (
+        {canProcure && (pendingPOs.length > 0 || pendingPOsLoading) && (
           <DashboardSection
             title="Pending Purchase Orders"
             action={{ label: 'View all', onClick: () => navigate('/app/procurement/purchase-orders') }}
           >
             <ActivityFeed
               items={pendingPOs}
-              isLoading={procQuery.isLoading}
+              isLoading={pendingPOsLoading}
               emptyText="No pending purchase orders"
             />
           </DashboardSection>

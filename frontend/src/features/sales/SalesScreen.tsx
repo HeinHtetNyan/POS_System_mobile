@@ -320,6 +320,9 @@ function OrderDetailPanel({ order, onClose }: { order: Order; onClose: () => voi
         {order.cashier_name && (
           <p className="text-xs text-zinc-500">By <span className="text-zinc-300">{order.cashier_name}</span></p>
         )}
+        {order.customer_name && (
+          <p className="text-xs text-zinc-500">Customer <span className="text-amber-400 font-medium">{order.customer_name}</span></p>
+        )}
       </div>
 
       <div className="px-4 py-3 border-b border-zinc-800 flex-shrink-0">

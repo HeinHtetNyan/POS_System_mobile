@@ -10,9 +10,8 @@ import { useTenantStore } from '@/store/tenant.store'
 import { fmt } from '@/lib/utils'
 import { StatCard, Table, Th, Td, Btn, Empty, Spinner, Input } from '@/components/ui'
 import { IconPlus, IconProducts, IconSearch } from '@/components/icons'
-import { ProductBarcodeCard } from '@/components/hardware/ProductBarcodeCard'
+import { ProductBarcodeCard, RawScannerModal, lookupProductByBarcode } from '@/scanner'
 import { LabelPrintPreviewModal } from '@/components/hardware/PrintPreviewModal'
-import { RawScannerModal } from '@/components/hardware/RawScannerModal'
 import type { Product as BackendProduct } from '@/shared/types'
 
 function generateSKU(): string {
@@ -57,9 +56,11 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
     is_active:     product?.is_active ?? true,
     initial_stock: '',
   })
-  const [saving, setSaving]         = useState(false)
-  const [error,  setError]          = useState<string | null>(null)
-  const [showScanner, setShowScanner] = useState(false)
+  const [saving, setSaving]             = useState(false)
+  const [error,  setError]              = useState<string | null>(null)
+  const [showScanner, setShowScanner]   = useState(false)
+  const [barcodeConflict, setBarcodeConflict] = useState<{ name: string; sku: string } | null>(null)
+  const [barcodeChecking, setBarcodeChecking] = useState(false)
 
   // Sync reorder_point from BranchInventory once the fetch resolves
   useEffect(() => {
@@ -74,10 +75,29 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
   const usbLastTime  = useRef(0)
   const usbTimer     = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleScan = useCallback((code: string) => {
+  const handleScan = useCallback(async (code: string) => {
+    if (isEdit) {
+      setForm(prev => ({ ...prev, sku: prev.sku || code, barcode: code }))
+      toast.success(`Scanned: ${code}`)
+      return
+    }
+    setBarcodeChecking(true)
+    setBarcodeConflict(null)
+    let conflict: { name: string; sku: string } | null = null
+    try {
+      const result = await lookupProductByBarcode(code)
+      if (result.status === 'found') {
+        conflict = { name: result.product.name, sku: result.product.sku }
+      }
+    } catch { /* network error — allow form fill */ }
+    setBarcodeChecking(false)
+    if (conflict) {
+      setBarcodeConflict(conflict)
+      return
+    }
     setForm(prev => ({ ...prev, sku: prev.sku || code, barcode: code }))
     toast.success(`Scanned: ${code}`)
-  }, [])
+  }, [isEdit])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -133,6 +153,7 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
     form.cost_price &&
     form.selling_price &&
     (isEdit || !!form.category_id) &&
+    !barcodeConflict &&
     !saving
 
   async function handleSubmit(e: FormEvent) {
@@ -230,15 +251,29 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
           {/* Single scan button */}
           <button
             type="button"
+            disabled={barcodeChecking}
             onClick={() => setShowScanner(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-zinc-700 hover:border-amber-500 hover:text-amber-400 text-zinc-400 text-sm font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-zinc-700 hover:border-amber-500 hover:text-amber-400 text-zinc-400 text-sm font-medium transition-colors disabled:opacity-50"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
               <rect x="7" y="7" width="3" height="10" rx="1"/><rect x="14" y="7" width="3" height="10" rx="1"/>
             </svg>
-            {form.barcode ? `Scanned: ${form.barcode} — tap to re-scan` : 'Tap to scan barcode'}
+            {barcodeChecking ? 'Checking barcode…' : form.barcode ? `Scanned: ${form.barcode} — tap to re-scan` : 'Tap to scan barcode'}
           </button>
+
+          {/* Duplicate barcode warning */}
+          {!isEdit && barcodeConflict && (
+            <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-950 border border-amber-800">
+              <span className="shrink-0 text-base leading-none mt-0.5">⚠️</span>
+              <div>
+                <p className="text-xs font-semibold text-amber-400">Barcode already in use</p>
+                <p className="text-xs text-amber-500 mt-0.5">
+                  "{barcodeConflict.name}" ({barcodeConflict.sku}) already has this barcode. Use a different barcode or scan another item.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* SKU — auto-generated (read-only), Barcode — editable / scan-filled */}
           <div className="grid grid-cols-2 gap-3">
@@ -260,7 +295,7 @@ function ProductFormModal({ product, categories, brands, onClose, onSaved }: Pro
                 )}
               </div>
             </div>
-            <Input label="Barcode" value={form.barcode} onChange={set('barcode')} placeholder="auto-filled by scan" />
+            <Input label="Barcode" value={form.barcode} onChange={e => { set('barcode')(e); setBarcodeConflict(null) }} placeholder="auto-filled by scan" />
           </div>
 
           <Input label="Name *" value={form.name} onChange={set('name')} placeholder="Product name" required />

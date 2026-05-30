@@ -22,6 +22,7 @@ from app.api.deps import (
     require_roles,
 )
 from app.cashiers.models import CashierSession
+from app.customers.models import Customer
 from app.core.constants import UserRole
 from app.sales.schemas import (
     CartCreateRequest,
@@ -314,9 +315,22 @@ async def list_orders(
         for row in rows.all():
             name_map[row[0]] = row[1]
 
+    # Batch-load customer names for orders that have a customer.
+    customer_ids = list({o.customer_id for o in items if o.customer_id})
+    customer_name_map: dict[uuid.UUID, str] = {}
+    if customer_ids:
+        crows = await db.execute(
+            _sa_select(Customer.id, Customer.name).where(Customer.id.in_(customer_ids))
+        )
+        for row in crows.all():
+            customer_name_map[row[0]] = row[1]
+
     order_responses = [
         OrderResponse.model_validate(o).model_copy(
-            update={"cashier_name": name_map.get(o.cashier_session_id)}
+            update={
+                "cashier_name": name_map.get(o.cashier_session_id),
+                "customer_name": customer_name_map.get(o.customer_id) if o.customer_id else None,
+            }
         )
         for o in items
     ]
@@ -341,7 +355,11 @@ async def get_order_by_number(
 ) -> OrderResponse:
     svc = OrderService(db)
     order = await svc.get_order_by_number(order_number, tenant_id)
-    return OrderResponse.model_validate(order)
+    resp = OrderResponse.model_validate(order)
+    if order.customer_id:
+        row = await db.execute(_sa_select(Customer.name).where(Customer.id == order.customer_id))
+        resp = resp.model_copy(update={"customer_name": row.scalar_one_or_none()})
+    return resp
 
 
 @router.get(
@@ -357,7 +375,11 @@ async def get_order(
 ) -> OrderResponse:
     svc = OrderService(db)
     order = await svc.get_order(order_id, tenant_id)
-    return OrderResponse.model_validate(order)
+    resp = OrderResponse.model_validate(order)
+    if order.customer_id:
+        row = await db.execute(_sa_select(Customer.name).where(Customer.id == order.customer_id))
+        resp = resp.model_copy(update={"customer_name": row.scalar_one_or_none()})
+    return resp
 
 
 @router.post(

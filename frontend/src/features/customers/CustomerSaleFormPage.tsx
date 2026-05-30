@@ -26,6 +26,70 @@ const PAYMENT_METHODS = [
   { value: 'KBZPAY', label: 'KBZPay' },
 ]
 
+interface SaleItemRowProps {
+  item: SaleItem
+  onUpdateQty: (productId: string, qty: number) => void
+  onRemove: (productId: string) => void
+}
+
+function SaleItemRow({ item, onUpdateQty, onRemove }: SaleItemRowProps) {
+  const [localQty, setLocalQty] = useState(String(item.quantity))
+  useEffect(() => { setLocalQty(String(item.quantity)) }, [item.quantity])
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-zinc-200 truncate leading-tight">{item.product.name}</p>
+        <p className="text-[11px] text-zinc-500 font-mono">{fmt(String(item.unit_price))} ea</p>
+      </div>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => onUpdateQty(item.product.id, item.quantity - 1)}
+          className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 flex items-center justify-center transition-colors"
+        >
+          <IconMinus width="10" height="10" />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={localQty}
+          onFocus={e => e.currentTarget.select()}
+          onChange={e => setLocalQty(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={() => {
+            const n = parseInt(localQty, 10)
+            if (n >= 1) onUpdateQty(item.product.id, n)
+            else setLocalQty(String(item.quantity))
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter')  e.currentTarget.blur()
+            if (e.key === 'Escape') { setLocalQty(String(item.quantity)); e.currentTarget.blur() }
+          }}
+          className="w-8 h-6 text-center text-sm text-zinc-200 font-mono bg-zinc-800 border border-zinc-700 rounded-md focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 transition-colors"
+        />
+        <button
+          onClick={() => onUpdateQty(item.product.id, item.quantity + 1)}
+          className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 flex items-center justify-center transition-colors"
+        >
+          <IconPlus width="10" height="10" />
+        </button>
+      </div>
+
+      <span className="w-20 text-right font-mono text-sm text-zinc-200 flex-shrink-0">
+        {fmt(String(item.unit_price * item.quantity))}
+      </span>
+
+      <button
+        onClick={() => onRemove(item.product.id)}
+        className="text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0"
+      >
+        <IconTrash width="14" height="14" />
+      </button>
+    </div>
+  )
+}
+
 export default function CustomerSaleFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -169,7 +233,7 @@ export default function CustomerSaleFormPage() {
     <div className="p-4 sm:p-6 space-y-4">
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-zinc-200">New Sale</h2>
+        <h2 className="text-sm font-semibold text-zinc-200">New Order</h2>
         {customer && (
           <div className="text-right flex-shrink-0">
             <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Current Balance</p>
@@ -184,7 +248,7 @@ export default function CustomerSaleFormPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ── Left: product search ─────────────────────────────────── */}
+        {/*  Left: product search */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
           <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Products</h3>
 
@@ -250,7 +314,7 @@ export default function CustomerSaleFormPage() {
           </div>
         </div>
 
-        {/* ── Right: order items + payment ─────────────────────────── */}
+        {/* Right: order items + payment */}
         <div className="space-y-4">
           {/* Order items */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
@@ -263,42 +327,12 @@ export default function CustomerSaleFormPage() {
             ) : (
               <div className="space-y-2">
                 {items.map(item => (
-                  <div key={item.product.id} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-zinc-200 truncate leading-tight">{item.product.name}</p>
-                      <p className="text-[11px] text-zinc-500 font-mono">{fmt(String(item.unit_price))} ea</p>
-                    </div>
-
-                    {/* Qty controls */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => updateQty(item.product.id, item.quantity - 1)}
-                        className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 flex items-center justify-center transition-colors"
-                      >
-                        <IconMinus width="10" height="10" />
-                      </button>
-                      <span className="w-8 text-center text-sm text-zinc-200 font-mono">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQty(item.product.id, item.quantity + 1)}
-                        className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 flex items-center justify-center transition-colors"
-                      >
-                        <IconPlus width="10" height="10" />
-                      </button>
-                    </div>
-
-                    <span className="w-20 text-right font-mono text-sm text-zinc-200 flex-shrink-0">
-                      {fmt(String(item.unit_price * item.quantity))}
-                    </span>
-
-                    <button
-                      onClick={() => removeItem(item.product.id)}
-                      className="text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0"
-                    >
-                      <IconTrash width="14" height="14" />
-                    </button>
-                  </div>
+                  <SaleItemRow
+                    key={item.product.id}
+                    item={item}
+                    onUpdateQty={updateQty}
+                    onRemove={removeItem}
+                  />
                 ))}
 
                 {/* Subtotal row */}
@@ -388,12 +422,6 @@ export default function CustomerSaleFormPage() {
                   <span className="text-zinc-500">Paying now</span>
                   <span className="font-mono text-green-400">{fmt(String(paid))}</span>
                 </div>
-                {remaining > 0 && (
-                  <div className="flex justify-between text-xs text-amber-400">
-                    <span>Added to balance</span>
-                    <span className="font-mono">+{fmt(String(remaining))}</span>
-                  </div>
-                )}
                 {remaining === 0 && items.length > 0 && (
                   <div className="flex justify-between text-xs text-green-400">
                     <span>Fully settled</span>
@@ -401,7 +429,7 @@ export default function CustomerSaleFormPage() {
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-semibold pt-1 border-t border-zinc-800">
-                  <span className="text-zinc-300">New Balance After Sale</span>
+                  <span className="text-zinc-300">Remaining Balance</span>
                   <span className={cn('font-mono', newBalance > 0 ? 'text-amber-400' : 'text-zinc-400')}>
                     {fmt(String(newBalance))}
                   </span>

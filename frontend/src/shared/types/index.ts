@@ -325,6 +325,7 @@ export interface Order {
   voided_by: string | null
   void_reason: string | null
   cashier_name?: string | null
+  customer_name?: string | null
   created_at: string
   updated_at: string
   items?: OrderItem[]
@@ -408,14 +409,14 @@ export type LedgerEntryType = 'SALE' | 'PAYMENT' | 'ADJUSTMENT' | 'CREDIT_NOTE' 
 
 export interface LedgerEntry {
   id: string
-  date: string
+  date?: string
   type: LedgerEntryType
-  reference: string | null
-  description: string
-  debit: string
-  credit: string
+  reference?: string | null
+  description?: string
+  debit?: string
+  credit?: string
   balance: string
-  created_at: string
+  created_at?: string
 }
 
 export interface CustomerStatement {

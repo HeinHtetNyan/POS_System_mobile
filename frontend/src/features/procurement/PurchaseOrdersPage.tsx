@@ -10,11 +10,11 @@ import { POStatusBadge } from './procurementHelpers'
 const PAGE_SIZE = 20
 
 const STATUS_FILTERS = [
-  { label: 'All',             value: undefined               },
-  { label: 'Ordered',         value: 'APPROVED'              },
-  { label: 'Partial Receipt', value: 'PARTIALLY_RECEIVED'    },
-  { label: 'Received',        value: 'RECEIVED'              },
-  { label: 'Cancelled',       value: 'CANCELLED'             },
+  { label: 'All',             value: undefined            },
+  { label: 'Ordered',         value: 'APPROVED'           },
+  { label: 'Partial Receipt', value: 'PARTIALLY_RECEIVED' },
+  { label: 'Received',        value: 'RECEIVED'           },
+  { label: 'Cancelled',       value: 'CANCELLED'          },
 ]
 
 export default function PurchaseOrdersPage() {
@@ -28,9 +28,32 @@ export default function PurchaseOrdersPage() {
     placeholderData: prev => prev,
   })
 
-  const orders     = data?.items ?? []
-  const total      = data?.total ?? 0
-  const totalPages = data?.total_pages ?? 1
+  // Fetch all receipts for client-side join (stale 30s since it's background data)
+  const { data: allReceiptsData } = useQuery({
+    queryKey: ['goods-receipts-all'],
+    queryFn: () => procurementService.listReceipts({ page: 1, page_size: 500 }),
+    staleTime: 30_000,
+  })
+
+  const orders      = data?.items ?? []
+  const total       = data?.total ?? 0
+  const totalPages  = data?.total_pages ?? 1
+  const allReceipts = allReceiptsData?.items ?? []
+
+  // Map poId → receipt[]
+  const receiptsByPoId = new Map<string, typeof allReceipts>()
+  allReceipts.forEach(r => {
+    const arr = receiptsByPoId.get(r.purchase_order_id) ?? []
+    arr.push(r)
+    receiptsByPoId.set(r.purchase_order_id, arr)
+  })
+
+  // One row per receipt; POs with no receipts get one row with receipt = null
+  const rows = orders.flatMap(po => {
+    const poReceipts = receiptsByPoId.get(po.id) ?? []
+    if (poReceipts.length === 0) return [{ po, receipt: null as typeof allReceipts[number] | null }]
+    return poReceipts.map(r => ({ po, receipt: r as typeof allReceipts[number] | null }))
+  })
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -63,11 +86,10 @@ export default function PurchaseOrdersPage() {
           ))}
         </div>
 
-        {/* Table */}
         <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center h-40"><Spinner size={28} /></div>
-          ) : orders.length === 0 ? (
+          ) : rows.length === 0 ? (
             <Empty
               icon={<span className="text-4xl">📋</span>}
               title="No purchase orders found"
@@ -83,29 +105,45 @@ export default function PurchaseOrdersPage() {
               <thead>
                 <tr>
                   <Th>PO Number</Th>
+                  <Th>Receipt #</Th>
                   <Th>Status</Th>
                   <Th right>Total</Th>
                   <Th>Order Date</Th>
                   <Th>Expected</Th>
-                  <Th>Created By</Th>
+                  <Th>Receive Date</Th>
                   <Th />
                 </tr>
               </thead>
               <tbody>
-                {orders.map(po => (
+                {rows.map((row, i) => (
                   <tr
-                    key={po.id}
-                    onClick={() => navigate(`/app/procurement/purchase-orders/${po.id}`)}
+                    key={`${row.po.id}-${row.receipt?.id ?? 'none'}-${i}`}
+                    onClick={() => navigate(`/app/procurement/purchase-orders/${row.po.id}`)}
                     className="cursor-pointer hover:bg-zinc-800/60 transition-colors"
                   >
                     <Td>
-                      <span className="font-mono font-semibold text-amber-400">{po.po_number}</span>
+                      <span className="font-mono font-semibold text-amber-400">{row.po.po_number}</span>
                     </Td>
-                    <Td><POStatusBadge status={po.status} /></Td>
-                    <Td right><span className="font-mono">{fmt(po.total_amount)}</span></Td>
-                    <Td muted>{fmtDate(po.order_date)}</Td>
-                    <Td muted>{po.expected_date ? fmtDate(po.expected_date) : '—'}</Td>
-                    <Td muted>{po.created_by_name ?? '—'}</Td>
+                    <Td>
+                      {row.receipt ? (
+                        <button
+                          className="font-mono font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                          onClick={e => {
+                            e.stopPropagation()
+                            navigate(`/app/procurement/receipts/${row.receipt!.id}`)
+                          }}
+                        >
+                          {row.receipt.receipt_number}
+                        </button>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </Td>
+                    <Td><POStatusBadge status={row.po.status} /></Td>
+                    <Td right><span className="font-mono">{fmt(row.po.total_amount)}</span></Td>
+                    <Td muted>{fmtDate(row.po.order_date)}</Td>
+                    <Td muted>{row.po.expected_date ? fmtDate(row.po.expected_date) : '—'}</Td>
+                    <Td muted>{row.receipt?.receipt_date ? fmtDate(row.receipt.receipt_date) : '—'}</Td>
                     <Td>
                       <IconChevRight width="14" height="14" className="text-zinc-600" />
                     </Td>

@@ -26,6 +26,12 @@ export default function CustomerDetailPage() {
     enabled: !!id,
   })
 
+  const { data: statement } = useQuery({
+    queryKey: ['customer-statement', id],
+    queryFn: () => customersService.getStatement(id!),
+    enabled: !!id,
+  })
+
   const addNoteMutation = useMutation({
     mutationFn: (text: string) => customersService.addNote(id!, { note: text }),
     onSuccess: () => {
@@ -44,7 +50,7 @@ export default function CustomerDetailPage() {
     )
   }
 
-  const balance = parseFloat(customer.balance)
+  const remainingDebt = statement?.closing_balance != null ? parseFloat(statement.closing_balance) : 0
   const recentEntries: LedgerEntry[] = ledgerData?.items?.slice(0, 5) ?? []
 
   return (
@@ -52,9 +58,9 @@ export default function CustomerDetailPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatCard
-          label="Outstanding Balance"
-          value={fmt(customer.balance)}
-          accent={balance > 0}
+          label="Remaining Debt"
+          value={fmt(remainingDebt)}
+          accent={remainingDebt > 0}
         />
         <StatCard label="Member Since"  value={new Date(customer.created_at).getFullYear().toString()} />
         <StatCard label="Last Updated"  value={timeAgo(customer.updated_at)} />

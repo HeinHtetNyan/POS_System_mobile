@@ -32,7 +32,6 @@ const CustomersScreen        = lazy(() => import('@/features/customers/Customers
 const CustomerFormPage       = lazy(() => import('@/features/customers/CustomerFormPage'))
 const CustomerLayout         = lazy(() => import('@/features/customers/CustomerLayout'))
 const CustomerDetailPage     = lazy(() => import('@/features/customers/CustomerDetailPage'))
-const CustomerLedgerPage     = lazy(() => import('@/features/customers/CustomerLedgerPage'))
 const CustomerPaymentsPage   = lazy(() => import('@/features/customers/CustomerPaymentsPage'))
 const CustomerStatementPage  = lazy(() => import('@/features/customers/CustomerStatementPage'))
 const CustomerSaleFormPage   = lazy(() => import('@/features/customers/CustomerSaleFormPage'))
@@ -52,10 +51,8 @@ const SupplierDetailPage        = lazy(() => import('@/features/procurement/Supp
 const PurchaseOrdersPage        = lazy(() => import('@/features/procurement/PurchaseOrdersPage'))
 const PurchaseOrderCreatePage   = lazy(() => import('@/features/procurement/PurchaseOrderCreatePage'))
 const PurchaseOrderDetailPage   = lazy(() => import('@/features/procurement/PurchaseOrderDetailPage'))
-const GoodsReceiptsPage         = lazy(() => import('@/features/procurement/GoodsReceiptsPage'))
 const GoodsReceiptDetailPage    = lazy(() => import('@/features/procurement/GoodsReceiptDetailPage'))
 const SupplierPayablesPage      = lazy(() => import('@/features/procurement/SupplierPayablesPage'))
-const SupplierPaymentsPage      = lazy(() => import('@/features/procurement/SupplierPaymentsPage'))
 const NotificationsPage         = lazy(() => import('@/features/notifications/NotificationsPage'))
 const NotificationDetailPage    = lazy(() => import('@/features/notifications/NotificationDetailPage'))
 const NotificationPreferencesPage = lazy(() => import('@/features/notifications/NotificationPreferencesPage'))
@@ -230,7 +227,6 @@ export const router = createBrowserRouter([
                   { index: true,           element: S(CustomerDetailPage)    },
                   { path: 'edit',          element: S(CustomerFormPage)      },
                   { path: 'new-sale',      element: S(CustomerSaleFormPage)  },
-                  { path: 'ledger',        element: S(CustomerLedgerPage)    },
                   { path: 'payments',      element: S(CustomerPaymentsPage)  },
                   { path: 'statements',    element: S(CustomerStatementPage) },
                 ],
@@ -248,9 +244,7 @@ export const router = createBrowserRouter([
                   { path: 'dashboard',       element: S(ProcurementDashboardPage)  },
                   { path: 'suppliers',       element: S(SuppliersPage)             },
                   { path: 'purchase-orders', element: S(PurchaseOrdersPage)        },
-                  { path: 'receipts',        element: S(GoodsReceiptsPage)         },
-                  { path: 'payables',        element: S(SupplierPayablesPage)      },
-                  { path: 'payments',        element: <SectionGuard section="procurement-payments">{S(SupplierPaymentsPage)}</SectionGuard> },
+                  { path: 'payments',        element: S(SupplierPayablesPage)      },
                   { path: 'suppliers/new',              element: S(SupplierFormPage)          },
                   { path: 'suppliers/:id',              element: S(SupplierDetailPage)        },
                   { path: 'suppliers/:id/edit',         element: S(SupplierFormPage)          },

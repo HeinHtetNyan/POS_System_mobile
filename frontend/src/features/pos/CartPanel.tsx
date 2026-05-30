@@ -50,7 +50,7 @@ export default function CartPanel({ onBackToProducts }: { onBackToProducts?: () 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowRefund(true)}
-              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-amber-400 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-amber-400 hover:border-amber-500/50 transition-colors"
               title="Process a refund"
             >
               <IconRefund width="13" height="13" />
@@ -59,7 +59,7 @@ export default function CartPanel({ onBackToProducts }: { onBackToProducts?: () 
             {items.length > 0 && (
               <button
                 onClick={clearCart}
-                className="flex items-center gap-1 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-red-400 hover:border-red-500/50 transition-colors"
               >
                 <IconX width="11" height="11" />
                 Clear

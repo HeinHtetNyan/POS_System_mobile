@@ -23,6 +23,12 @@ export default function CustomerPaymentsPage() {
     enabled: !!id,
   })
 
+  const { data: statement } = useQuery({
+    queryKey: ['customer-statement', id],
+    queryFn: () => customersService.getStatement(id!),
+    enabled: !!id,
+  })
+
   const paymentMutation = useMutation({
     mutationFn: () => customersService.recordPayment(id!, {
       amount,
@@ -38,14 +44,25 @@ export default function CustomerPaymentsPage() {
       setReference('')
       qc.invalidateQueries({ queryKey: ['customer', id] })
       qc.invalidateQueries({ queryKey: ['customer-ledger', id] })
+      qc.invalidateQueries({ queryKey: ['customer-statement', id] })
       qc.invalidateQueries({ queryKey: ['customers'] })
     },
     onError: () => toast.error('Failed to record payment'),
   })
 
   const allEntries: LedgerEntry[] = ledgerData?.items ?? []
-  const payments = allEntries.filter(e => e.type === 'PAYMENT')
-  const totalPaid = payments.reduce((sum, e) => sum + parseFloat(e.credit ?? '0'), 0)
+
+  // Sale reference IDs — payments matching these were made during checkout (not standalone debt payments)
+  const saleRefs = new Set(
+    allEntries.filter(e => e.type === 'SALE' && e.reference).map(e => e.reference as string)
+  )
+
+  // Only show payments NOT matched to a same-order sale (standalone debt repayments)
+  const debtPayments = allEntries.filter(
+    e => e.type === 'PAYMENT' && (!e.reference || !saleRefs.has(e.reference))
+  )
+
+  const totalPaid = debtPayments.reduce((sum, e) => sum + parseFloat(e.credit ?? '0'), 0)
 
   function closeModal() {
     setShowModal(false)
@@ -57,28 +74,38 @@ export default function CustomerPaymentsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       {/* Summary + action */}
-      <div className="flex items-center justify-between">
-        <StatCard label="Payments (this page)" value={fmt(totalPaid)} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-3">
+          <StatCard label="Debt Payments" value={fmt(totalPaid)} />
+          {statement?.closing_balance != null && (
+            <StatCard
+              label="Remaining Debt"
+              value={fmt(statement.closing_balance)}
+              accent={parseFloat(statement.closing_balance) > 0}
+            />
+          )}
+        </div>
         <Btn onClick={() => setShowModal(true)}>
           <IconPlus width="14" height="14" /> Record Payment
         </Btn>
       </div>
 
-      {/* Payment history */}
+      {/* Debt payment history */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-zinc-800">
-          <h3 className="text-sm font-semibold text-zinc-200">Payment History</h3>
+          <h3 className="text-sm font-semibold text-zinc-200">Debt Payment History</h3>
+          <p className="text-xs text-zinc-600 mt-0.5">Payments made to clear outstanding balance</p>
         </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center h-40">
             <Spinner size={28} />
           </div>
-        ) : payments.length === 0 ? (
+        ) : debtPayments.length === 0 ? (
           <Empty
             icon={<IconCash width="40" height="40" />}
-            title="No payments recorded"
-            subtitle="Use the button above to record a payment"
+            title="No debt payments yet"
+            subtitle="Use the button above to record a payment toward the customer's outstanding balance"
             action={
               <Btn size="sm" onClick={() => setShowModal(true)}>
                 <IconPlus width="14" height="14" /> Record Payment
@@ -90,17 +117,17 @@ export default function CustomerPaymentsPage() {
             <thead>
               <tr>
                 <Th>Date</Th>
-                <Th>Description</Th>
+                <Th>Note</Th>
                 <Th>Reference</Th>
-                <Th right>Amount</Th>
+                <Th right>Amount Paid</Th>
                 <Th right>Balance After</Th>
               </tr>
             </thead>
             <tbody>
-              {payments.map((entry, i) => (
+              {debtPayments.map((entry, i) => (
                 <tr key={entry.id ?? i} className="hover:bg-zinc-800/40 transition-colors">
                   <Td muted>{entry.date ? fmtDateTime(entry.date) : '—'}</Td>
-                  <Td>{entry.description || 'Payment'}</Td>
+                  <Td>{entry.description || '—'}</Td>
                   <Td muted mono>{entry.reference ?? '—'}</Td>
                   <Td right>
                     <span className="font-mono font-semibold text-green-400">{fmt(entry.credit ?? 0)}</span>
@@ -116,8 +143,10 @@ export default function CustomerPaymentsPage() {
       </div>
 
       {/* Record Payment Modal */}
-      <Modal open={showModal} onClose={closeModal} title="Record Payment">
+      <Modal open={showModal} onClose={closeModal} title="Record Debt Payment">
         <div className="space-y-4">
+          <p className="text-xs text-zinc-500">Record a payment toward this customer's outstanding balance.</p>
+
           <ModalField label="Amount" required>
             <input
               type="number"

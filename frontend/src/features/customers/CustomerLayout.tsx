@@ -6,10 +6,9 @@ import { IconChevLeft, IconUser, IconPlus } from '@/components/icons'
 import { customersService } from '@/services/customers/customers.service'
 
 const TABS = [
-  { to: '',          end: true,  label: 'Overview'  },
-  { to: 'ledger',               label: 'Ledger'    },
-  { to: 'payments',             label: 'Payments'  },
-  { to: 'statements',           label: 'Statement' },
+  { to: '',           end: true,  label: 'Overview'       },
+  { to: 'payments',              label: 'Debt Payments'  },
+  { to: 'statements',            label: 'Statement'      },
 ]
 
 export default function CustomerLayout() {
@@ -75,7 +74,7 @@ export default function CustomerLayout() {
             onClick={() => navigate(`/app/customers/${id}/new-sale`)}
             className="flex-shrink-0"
           >
-            <IconPlus width="11" height="11" /> New Sale
+            <IconPlus width="11" height="11" /> New Order
           </Btn>
 
           <div className="flex-shrink-0 text-right">

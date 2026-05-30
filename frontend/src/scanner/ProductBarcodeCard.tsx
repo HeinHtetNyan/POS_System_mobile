@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { toast } from 'sonner'
-import { barcodeService } from '@/services/barcode/barcode.service'
+import { barcodeService } from './barcode.service'
 import { fmt } from '@/lib/utils'
 import type { Product } from '@/shared/types'
 
@@ -11,7 +11,6 @@ interface ProductBarcodeCardProps {
 }
 
 export function ProductBarcodeCard({ product, showPrice = true, compact = false }: ProductBarcodeCardProps) {
-  // Use barcode if present, otherwise fall back to SKU
   const value   = (product.barcode || product.sku).trim()
   const dataUrl = useMemo(() => {
     try { return barcodeService.generateDataUrl(value) } catch { return null }

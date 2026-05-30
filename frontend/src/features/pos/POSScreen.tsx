@@ -12,9 +12,8 @@ import { categoriesService } from '@/services/categories/categories.service'
 import { IconSearch, IconBarcode, IconCash, IconExpand, IconCompress } from '@/components/icons'
 import { Kbd, Spinner } from '@/components/ui'
 import { cn } from '@/lib/utils'
-// ScannerInputCapture is lightweight (keyboard listener only — no camera library)
-import { ScannerInputCapture } from '@/components/hardware/ScannerInputCapture'
-import { lookupProductBySku } from '@/hooks/useProductScan'
+import { ScannerInputCapture } from '@/scanner'
+import { lookupProductBySku } from '@/scanner'
 import type { Product } from '@/types'
 import type { Product as SharedProduct } from '@/shared/types'
 import CategoryFilter from '@/features/pos/CategoryFilter'
@@ -22,9 +21,8 @@ import ProductGrid from '@/features/pos/ProductGrid'
 import CartPanel from '@/features/pos/CartPanel'
 import PaymentOverlay from '@/features/payment/PaymentOverlay'
 
-// Lazy-load camera scanner — quagga2 only loads when scanner modal is opened
 const HardwareScannerModal = lazy(() =>
-  import('@/components/hardware/HardwareScannerModal').then(m => ({ default: m.HardwareScannerModal }))
+  import('@/scanner/ProductScannerModal').then(m => ({ default: m.ProductScannerModal }))
 )
 
 // Map backend product + inventory qty to legacy Product shape
@@ -168,12 +166,12 @@ export default function POSScreen() {
 
   const handleAdd = useCallback((product: Product) => { addItem(product) }, [addItem])
 
-  // Handle a scan result — map SharedProduct → legacy Product then add to cart
+  // Handle a scan result — continuous mode: add to cart but keep scanner open
   const handleScanResult = useCallback((scanned: SharedProduct) => {
     const legacy = mapProduct(scanned, inventoryMap, categoryMap)
     addItem(legacy)
-    setScannerOpen(false)
-    toast.success(`Added: ${scanned.name}`)
+    // No close/toast here — ProductScannerModal shows inline success feedback
+    // and stays open for the next scan. User closes manually when done.
   }, [inventoryMap, categoryMap, addItem])
 
   // Handle USB/Bluetooth keyboard-emulation scanner input
@@ -222,7 +220,7 @@ export default function POSScreen() {
         enabled={!scannerOpen && checkoutStep === 'cart'}
       />
 
-      {/* Camera scanner modal — lazy-loaded, quagga2 only downloads when opened */}
+      {/* Camera scanner modal — lazy-loaded; html5-qrcode only downloads when opened */}
       {scannerOpen && (
         <Suspense fallback={
           <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -232,7 +230,6 @@ export default function POSScreen() {
           <HardwareScannerModal
             title="Scan Product Barcode"
             onResult={handleScanResult}
-            onNotFound={code => { toast.error(`Product not found: ${code}`); setScannerOpen(false) }}
             onClose={() => setScannerOpen(false)}
           />
         </Suspense>
