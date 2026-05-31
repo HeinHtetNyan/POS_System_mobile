@@ -71,13 +71,14 @@ export default function RefundModal({ onClose, onSuccess }: Props) {
         return next
       }
       const qty = parseFloat(item.quantity)
-      const unitPrice = parseFloat(item.unit_price)
+      // Use per-unit total (includes tax, deducts line discount) so refund matches what was paid
+      const unitTotal = parseFloat(item.total) / parseFloat(item.quantity)
       return {
         ...prev,
         [item.id]: {
           orderItem: item,
           qty,
-          amount: parseFloat((unitPrice * qty).toFixed(2)),
+          amount: parseFloat((unitTotal * qty).toFixed(2)),
         },
       }
     })
@@ -88,7 +89,9 @@ export default function RefundModal({ onClose, onSuccess }: Props) {
     let qty = parseInt(raw, 10)
     if (isNaN(qty) || qty < 1) qty = 1
     if (qty > max) qty = max
-    const amount = parseFloat((parseFloat(item.unit_price) * qty).toFixed(2))
+    // Per-unit total (includes tax, deducts line discount)
+    const unitTotal = parseFloat(item.total) / parseFloat(item.quantity)
+    const amount = parseFloat((unitTotal * qty).toFixed(2))
     setSelected(prev => ({
       ...prev,
       [item.id]: { orderItem: item, qty, amount },

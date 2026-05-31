@@ -102,7 +102,7 @@ function AddBranchModal({ tenantId, onClose }: { tenantId: string; onClose: () =
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Timezone" value={form.timezone ?? 'UTC'} onChange={v => setForm(p => ({ ...p, timezone: v }))} placeholder="UTC" />
-            <Field label="Currency" value={form.currency ?? 'MMK'} onChange={v => setForm(p => ({ ...p, currency: v }))} placeholder="MMK" />
+            <Field label="Currency" value={form.currency ?? 'MMK'} onChange={v => setForm(p => ({ ...p, currency: v }))} placeholder="Kyats" />
           </div>
         </div>
 
@@ -180,7 +180,7 @@ function EditBranchModal({
           <Field label="Phone"       value={form.phone}    onChange={set('phone')}    placeholder="+1 555 000 0000" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Timezone"  value={form.timezone} onChange={set('timezone')} placeholder="UTC" />
-            <Field label="Currency"  value={form.currency} onChange={set('currency')} placeholder="MMK" />
+            <Field label="Currency"  value={form.currency} onChange={set('currency')} placeholder="Kyats" />
           </div>
         </div>
 

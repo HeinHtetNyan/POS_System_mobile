@@ -7,7 +7,8 @@ import { tenantService } from '@/services/tenant/tenant.service'
 
 interface CartState {
   items: CartItem[]
-  discount: number    // order-level %
+  discount: number             // order-level value (% when type=percent, absolute when type=amount)
+  discountType: 'percent' | 'amount'
   note: string
 
   // Checkout flow
@@ -24,7 +25,8 @@ interface CartState {
   removeItem: (id: string) => void
   updateQty: (id: string, qty: number) => void
   updateLineDiscount: (id: string, discount: number) => void
-  setDiscount: (pct: number) => void
+  setDiscount: (val: number) => void
+  setDiscountType: (type: 'percent' | 'amount') => void
   setNote: (note: string) => void
   clearCart: () => void
 
@@ -42,6 +44,7 @@ interface CartState {
 export const useCartStore = create<CartState>()((set) => ({
   items: [],
   discount: 0,
+  discountType: 'percent',
   note: '',
   checkoutStep: 'cart',
   paymentMethod: 'cash',
@@ -54,7 +57,8 @@ export const useCartStore = create<CartState>()((set) => ({
     if (existing) {
       return { items: state.items.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i) }
     }
-    return { items: [...state.items, { ...product, qty: 1, lineDiscount: 0 }] }
+    const autoDiscount = product.promoDiscountPct ?? 0
+    return { items: [...state.items, { ...product, qty: 1, lineDiscount: autoDiscount }] }
   }),
 
   removeItem: (id) => set(state => ({ items: state.items.filter(i => i.id !== id) })),
@@ -69,10 +73,11 @@ export const useCartStore = create<CartState>()((set) => ({
   })),
 
   setDiscount: (discount) => set({ discount }),
+  setDiscountType: (discountType) => set({ discountType }),
   setNote: (note) => set({ note }),
 
   clearCart: () => set({
-    items: [], discount: 0, note: '',
+    items: [], discount: 0, discountType: 'percent', note: '',
     checkoutStep: 'cart', paymentAmount: '', splitPayments: [],
     completedOrderId: null,
   }),
@@ -88,16 +93,17 @@ export const useCartStore = create<CartState>()((set) => ({
   completeOrder: (orderId) => set({ completedOrderId: orderId, checkoutStep: 'receipt' }),
 
   newSale: () => set({
-    items: [], discount: 0, note: '',
+    items: [], discount: 0, discountType: 'percent', note: '',
     checkoutStep: 'cart', paymentAmount: '', splitPayments: [],
     completedOrderId: null,
   }),
 }))
 
 export function useCartTotals(): CartTotals {
-  const items    = useCartStore(s => s.items)
-  const discount = useCartStore(s => s.discount)
-  const tenantId = useAuthStore(s => s.user?.tenant_id)
+  const items        = useCartStore(s => s.items)
+  const discount     = useCartStore(s => s.discount)
+  const discountType = useCartStore(s => s.discountType)
+  const tenantId     = useAuthStore(s => s.user?.tenant_id)
 
   const { data: settings } = useQuery({
     queryKey: ['tenant-settings', tenantId],
@@ -124,7 +130,9 @@ export function useCartTotals(): CartTotals {
       itemCount += item.qty
     }
 
-    const orderDiscAmt   = (discount || 0) / 100 * rawTotal
+    const orderDiscAmt   = discountType === 'amount'
+      ? Math.min(discount || 0, rawTotal)
+      : (discount || 0) / 100 * rawTotal
     const afterOrderDisc = rawTotal - orderDiscAmt
 
     let subtotal: number, tax: number, total: number
@@ -158,5 +166,5 @@ export function useCartTotals(): CartTotals {
       taxRate,
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, discount, taxEnabled, taxRate, taxInclusive, taxName])
+  }, [items, discount, discountType, taxEnabled, taxRate, taxInclusive, taxName])
 }

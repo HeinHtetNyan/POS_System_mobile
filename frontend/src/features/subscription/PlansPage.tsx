@@ -97,7 +97,7 @@ function UpgradeProofModal({ plan, onClose }: { plan: Plan; onClose: () => void 
             {!done && (
               <p className="text-xs text-zinc-500 mt-0.5">
                 For: <span className="text-amber-400 font-medium">{plan.name}</span>
-                {' — '}{plan.currency} {Number(plan.price).toLocaleString()} / {plan.billing_cycle.toLowerCase()}
+                {' — '}{Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency} / {plan.billing_cycle.toLowerCase()}
               </p>
             )}
           </div>
@@ -145,7 +145,7 @@ function UpgradeProofModal({ plan, onClose }: { plan: Plan; onClose: () => void 
                   <input
                     type="text" value={currency}
                     onChange={e => setCurrency(e.target.value)}
-                    placeholder="MMK" className={inp}
+                    placeholder="Kyats" className={inp}
                   />
                 </div>
               </div>
@@ -203,7 +203,7 @@ function ConfirmDowngradeModal({
           <p className="text-sm text-zinc-400 mt-2">
             Your plan will switch to{' '}
             <span className="text-zinc-200 font-medium">{plan.name}</span>
-            {' '}({plan.currency} {Number(plan.price).toLocaleString()} / {plan.billing_cycle.toLowerCase()}) at the end of your current billing period.
+            {' '}({Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency} / {plan.billing_cycle.toLowerCase()}) at the end of your current billing period.
           </p>
           <p className="text-xs text-amber-400 mt-2">
             You will keep your current plan features until the billing period ends. Some features or limits may be reduced after the downgrade takes effect.
@@ -288,7 +288,7 @@ function UpgradeProofSubmitModal({ plan, onClose }: { plan: Plan; onClose: () =>
             {!done && (
               <p className="text-xs text-zinc-500 mt-0.5">
                 Upgrading to <span className="text-amber-400 font-medium">{plan.name}</span>
-                {' — '}{plan.currency} {Number(plan.price).toLocaleString()} / {plan.billing_cycle.toLowerCase()}
+                {' — '}{Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency} / {plan.billing_cycle.toLowerCase()}
               </p>
             )}
           </div>
@@ -554,7 +554,7 @@ export default function PlansPage() {
                           <p className="text-2xl font-bold text-zinc-100">Free</p>
                         ) : (
                           <p className="text-2xl font-bold text-zinc-100">
-                            {plan.currency} {Number(plan.price).toLocaleString()}
+                            {Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency}
                             <span className="text-sm font-normal text-zinc-500 ml-1.5">
                               / {plan.billing_cycle.toLowerCase()}
                             </span>

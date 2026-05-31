@@ -48,7 +48,7 @@ function isIOS() {
 type ModalState  = 'requesting' | 'active' | 'paused' | 'denied' | 'unsupported'
 type ZoomRange   = { min: number; max: number; step: number; current: number }
 type ScanFeedback =
-  | { type: 'success'; name: string; price: string; format: string | null }
+  | { type: 'success'; name: string; price: string; format: string | null; quantity: number }
   | { type: 'notfound'; code: string }
   | { type: 'error'; message: string }
 
@@ -63,6 +63,7 @@ interface ProductScannerModalProps {
 
 export function ProductScannerModal({
   onResult,
+  onNotFound,
   onClose,
   title = 'Scan Product',
 }: ProductScannerModalProps) {
@@ -71,8 +72,10 @@ export function ProductScannerModal({
   const lastCodeRef   = useRef<string | null>(null)
   const mountedRef    = useRef(true)
   const streamRef     = useRef<MediaStream | null>(null)
-  const cbRef         = useRef({ onResult })
-  cbRef.current       = { onResult }
+  const cbRef         = useRef({ onResult, onNotFound })
+  cbRef.current       = { onResult, onNotFound }
+  // Tracks how many times each product (by id) has been scanned in this modal session
+  const scanCountsRef = useRef<Record<string, number>>({})
 
   const [modalState, setModalState]         = useState<ModalState>('requesting')
   const [lastScan, setLastScan]             = useState<ScanFeedback | null>(null)
@@ -186,10 +189,17 @@ export function ProductScannerModal({
 
     if (result.status === 'found') {
       cbRef.current.onResult(result.product)
-      setLastScan({ type: 'success', name: result.product.name, price: result.product.selling_price ?? '0', format: formatName })
+      const newCount = (scanCountsRef.current[result.product.id] ?? 0) + 1
+      scanCountsRef.current[result.product.id] = newCount
+      setLastScan({ type: 'success', name: result.product.name, price: result.product.selling_price ?? '0', format: formatName, quantity: newCount })
       resumeDelay = 500
     } else if (result.status === 'not_found') {
-      setLastScan({ type: 'notfound', code })
+      if (cbRef.current.onNotFound) {
+        // Caller handles the "not found" flow (e.g. show an add-product modal)
+        cbRef.current.onNotFound(code)
+      } else {
+        setLastScan({ type: 'notfound', code })
+      }
     } else {
       setLastScan({ type: 'error', message: result.message })
     }
@@ -411,7 +421,7 @@ export function ProductScannerModal({
               {lastScan.format && (
                 <span className="text-xs text-zinc-600 font-mono">{lastScan.format}</span>
               )}
-              <span className="text-xs text-zinc-400">×1</span>
+              <span className="text-xs text-zinc-400">×{lastScan.quantity}</span>
               <span className="text-xs font-medium text-zinc-300">{fmt(lastScan.price)}</span>
             </div>
           </div>

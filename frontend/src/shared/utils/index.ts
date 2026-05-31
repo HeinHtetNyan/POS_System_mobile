@@ -5,11 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const CURRENCY_SYMBOL = 'MMK'
+export const CURRENCY_SYMBOL = 'Kyats'
 export const TAX_RATE = 0.10
 
+export function displayCurrency(code: string | undefined): string {
+  if (!code) return 'Kyats'
+  return code === 'MMK' ? 'Kyats' : code
+}
+
 export function fmt(amount: number | string | undefined): string {
-  return `${CURRENCY_SYMBOL} ${Number(amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+  return `${Number(amount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${CURRENCY_SYMBOL}`
 }
 
 export function fmtDate(date: Date | string): string {

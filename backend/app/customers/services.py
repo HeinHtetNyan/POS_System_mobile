@@ -324,7 +324,81 @@ class CustomerService:
             },
             request_id=request_id,
         )
+        # Update order payment statuses to reflect this debt repayment
+        await self._reconcile_customer_order_payments(customer_id, tenant_id)
         return entry
+
+    async def _reconcile_customer_order_payments(
+        self, customer_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> None:
+        """
+        Re-derive payment_status for all of this customer's orders after a
+        debt payment is recorded.
+
+        Two payment pools exist for a customer:
+          1. Checkout payments — recorded with reference_type="ORDER" on the
+             ledger, tied to a specific order.  These reduce that order's debt
+             before FIFO allocation begins.
+          2. Standalone payments — everything else (recorded via the debt-
+             payment screen).  These are allocated FIFO across orders' remaining
+             debts (oldest order first).
+
+        Mixing the two into a single pool caused double-counting: the checkout
+        amount was subtracted from order_debt AND included in the payment pool,
+        so the pool appeared larger than the actual standalone payments.
+        """
+        from sqlalchemy import select as sa_select
+        from app.sales.models import Order
+        from app.core.constants import PaymentStatus
+
+        all_entries = await self.ledger_repo.get_by_customer(customer_id)
+
+        # Checkout PAYMENT entries are tagged reference_type="ORDER" by CheckoutService.
+        # Build a map: order_id (str) → total checkout amount paid for that order.
+        checkout_by_order: dict[str, Decimal] = {}
+        standalone_pool = Decimal("0")
+        for e in all_entries:
+            if e.entry_type != CustomerLedgerEntryType.PAYMENT:
+                continue
+            if e.reference_type == "ORDER" and e.reference_id:
+                checkout_by_order[e.reference_id] = (
+                    checkout_by_order.get(e.reference_id, Decimal("0")) + e.amount
+                )
+            else:
+                standalone_pool += e.amount
+
+        # All orders for this customer, oldest first.
+        stmt = (
+            sa_select(Order)
+            .where(Order.customer_id == customer_id, Order.tenant_id == tenant_id)
+            .order_by(Order.created_at.asc())
+        )
+        result = await self.session.execute(stmt)
+        orders = list(result.scalars().all())
+
+        remaining = standalone_pool
+        for order in orders:
+            order_checkout = checkout_by_order.get(str(order.id), Decimal("0"))
+            order_debt = order.total_amount - order_checkout  # debt after checkout payment
+
+            if order_debt <= Decimal("0"):
+                order.payment_status = PaymentStatus.PAID
+                continue
+
+            if remaining >= order_debt:
+                order.payment_status = PaymentStatus.PAID
+                remaining -= order_debt
+            elif remaining > Decimal("0"):
+                order.payment_status = PaymentStatus.PARTIAL
+                remaining = Decimal("0")
+            else:
+                # Standalone pool exhausted before reaching this order.
+                # If a checkout payment was made, it's PARTIAL; otherwise PENDING.
+                order.payment_status = (
+                    PaymentStatus.PARTIAL if order_checkout > Decimal("0") else PaymentStatus.PENDING
+                )
+
+        await self.session.flush()
 
     async def adjust_balance(
         self,

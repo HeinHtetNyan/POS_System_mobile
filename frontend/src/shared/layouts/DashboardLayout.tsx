@@ -30,7 +30,7 @@ const APP_NAV: NavItem[] = [
   { to: '/app/sales',         section: 'sales',         label: 'Sales',         icon: <IconSales     width="18" height="18" /> },
   { to: '/app/products',      section: 'products',      label: 'Products',      icon: <IconProducts  width="18" height="18" /> },
   { to: '/app/inventory',     section: 'inventory',     label: 'Inventory',     icon: <IconInventory width="18" height="18" /> },
-  { to: '/app/customers',     section: 'customers',     label: 'Customers',     icon: <span className="w-[18px] h-[18px] flex items-center justify-center text-base leading-none">👥</span> },
+  { to: '/app/customers',     section: 'customers',     label: 'Wholesale Customers', icon: <span className="w-[18px] h-[18px] flex items-center justify-center text-base leading-none">👥</span> },
   { to: '/app/procurement',   section: 'procurement',   label: 'Procurement',   icon: <span className="w-[18px] h-[18px] flex items-center justify-center text-base leading-none">📦</span> },
   { to: '/app/analytics',     section: 'analytics',     label: 'Analytics',     icon: <span className="w-[18px] h-[18px] flex items-center justify-center text-base leading-none">📊</span> },
   { to: '/app/notifications', section: 'notifications', label: 'Notifications', icon: <span className="w-[18px] h-[18px] flex items-center justify-center text-base leading-none">🔔</span> },
@@ -186,7 +186,7 @@ function SidebarContent({ navGroup, onClose, onSearch }: { navGroup: string; onC
               <span className="text-[10px] text-zinc-600 truncate ml-2">{tz.replace(/_/g, ' ')}</span>
             </div>
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-[10px] font-semibold text-amber-400">{currency}</span>
+              <span className="text-[10px] font-semibold text-amber-400">{currency === 'MMK' ? 'Kyats' : currency}</span>
               <span className="text-zinc-700 text-[10px]">·</span>
               <span className="text-[10px] text-zinc-500">{locale}</span>
             </div>

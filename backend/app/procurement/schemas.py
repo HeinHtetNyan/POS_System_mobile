@@ -25,6 +25,7 @@ class PurchaseOrderItemCreate(BaseSchema):
 class PurchaseOrderItemResponse(TimestampedSchema):
     purchase_order_id: uuid.UUID
     product_id: uuid.UUID
+    product_name: str | None = None
     variant_id: uuid.UUID | None
     ordered_quantity: Decimal
     received_quantity: Decimal
@@ -101,6 +102,7 @@ class GoodsReceiptItemCreate(BaseSchema):
 class GoodsReceiptItemResponse(TimestampedSchema):
     goods_receipt_id: uuid.UUID
     purchase_order_item_id: uuid.UUID
+    product_name: str | None = None
     received_quantity: Decimal
     unit_cost: Decimal
     line_total: Decimal

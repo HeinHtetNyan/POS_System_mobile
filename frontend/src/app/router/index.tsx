@@ -76,9 +76,6 @@ const StaffDashboardPage    = lazy(() => import('@/features/dashboard/StaffDashb
 const PlansPage                   = lazy(() => import('@/features/superadmin/PlansPage'))
 const PlanFormPage                = lazy(() => import('@/features/superadmin/PlanFormPage'))
 const PlanDetailPage              = lazy(() => import('@/features/superadmin/PlanDetailPage'))
-const AdminSubscriptionsPage      = lazy(() => import('@/features/superadmin/AdminSubscriptionsPage'))
-const AdminSubscriptionDetailPage = lazy(() => import('@/features/superadmin/AdminSubscriptionDetailPage'))
-const OverridesPage               = lazy(() => import('@/features/superadmin/OverridesPage'))
 
 const ResellerLayout              = lazy(() => import('@/features/reseller/ResellerLayout'))
 const ResellerDashboardPage       = lazy(() => import('@/features/reseller/ResellerDashboardPage'))
@@ -97,13 +94,10 @@ const ResellerWalletPage          = lazy(() => import('@/features/reseller/Resel
 const SuperAdminDashboardPage     = lazy(() => import('@/features/superadmin/SuperAdminDashboardPage'))
 const BusinessesPage              = lazy(() => import('@/features/superadmin/BusinessesPage'))
 const BusinessDetailPage          = lazy(() => import('@/features/superadmin/BusinessDetailPage'))
-const AdminUsersPage              = lazy(() => import('@/features/superadmin/AdminUsersPage'))
 const AdminUserDetailPage         = lazy(() => import('@/features/superadmin/AdminUserDetailPage'))
 const ResellersPage               = lazy(() => import('@/features/superadmin/ResellersPage'))
 const ResellerDetailPage          = lazy(() => import('@/features/superadmin/ResellerDetailPage'))
-const PlatformAnalyticsPage       = lazy(() => import('@/features/superadmin/PlatformAnalyticsPage'))
 const AuditLogsPage               = lazy(() => import('@/features/superadmin/AuditLogsPage'))
-const DevicesPage                 = lazy(() => import('@/features/superadmin/DevicesPage'))
 const PlatformNotificationsPage   = lazy(() => import('@/features/superadmin/PlatformNotificationsPage'))
 const ResellerFinancePage         = lazy(() => import('@/features/superadmin/ResellerFinancePage'))
 

@@ -109,6 +109,10 @@ export interface Product {
   is_active: boolean
   image_url: string | null
   variants: ProductVariant[]
+  discount_type: string | null
+  discount_value: string | null
+  discount_start_at: string | null
+  discount_end_at: string | null
   created_at: string
   updated_at: string
 }
@@ -972,6 +976,7 @@ export interface DashboardKPIs {
   new_customers_month: number
   low_stock_products: number
   inventory_value: string
+  total_customer_outstanding: string
   generated_at: string
 }
 
@@ -1178,6 +1183,7 @@ export interface PurchaseOrderItem {
   id: string
   purchase_order_id: string
   product_id: string
+  product_name?: string | null
   variant_id: string | null
   ordered_quantity: string
   received_quantity: string
@@ -1241,6 +1247,7 @@ export interface GoodsReceiptItem {
   id: string
   goods_receipt_id: string
   purchase_order_item_id: string
+  product_name?: string | null
   received_quantity: string
   unit_cost: string
   line_total: string

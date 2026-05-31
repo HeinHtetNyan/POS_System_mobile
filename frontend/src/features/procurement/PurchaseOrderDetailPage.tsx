@@ -97,7 +97,10 @@ function ReceiveGoodsModal({
             {items.map(item => (
               <div key={item.id} className="grid grid-cols-[1fr_80px_110px_90px] gap-2 items-center bg-zinc-800/40 rounded-xl p-2">
                 <div className="min-w-0">
-                  <p className="text-xs text-zinc-400 font-mono truncate">{item.product_id.slice(0, 8)}…</p>
+                  {item.product_name
+                    ? <p className="text-xs text-zinc-200 truncate">{item.product_name}</p>
+                    : <p className="text-xs text-zinc-400 font-mono truncate">{item.product_id.slice(0, 8)}…</p>
+                  }
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-mono text-zinc-400">{item.ordered_quantity}</span>
@@ -362,7 +365,7 @@ export default function PurchaseOrderDetailPage() {
             <Table>
               <thead>
                 <tr>
-                  <Th>Product ID</Th>
+                  <Th>Product</Th>
                   <Th right>Ordered</Th>
                   <Th right>Received</Th>
                   <Th right>Unit Cost</Th>
@@ -377,7 +380,12 @@ export default function PurchaseOrderDetailPage() {
                   const pct      = ordered > 0 ? Math.min(100, Math.round((received / ordered) * 100)) : 0
                   return (
                     <tr key={item.id} className="hover:bg-zinc-800/40 transition-colors">
-                      <Td muted mono>{item.product_id.slice(0, 8)}…</Td>
+                      <Td>
+                        {item.product_name
+                          ? <span className="text-sm text-zinc-200">{item.product_name}</span>
+                          : <span className="text-xs font-mono text-zinc-500">{item.product_id.slice(0, 8)}…</span>
+                        }
+                      </Td>
                       <Td right><span className="font-mono">{item.ordered_quantity}</span></Td>
                       <Td right>
                         <span className={`font-mono ${received >= ordered ? 'text-green-400' : received > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>

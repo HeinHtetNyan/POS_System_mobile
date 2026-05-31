@@ -133,6 +133,24 @@ class AnalyticsRepository:
         row = result.mappings().first()
         return dict(row) if row else {"total_customers": 0, "new_customers_month": 0}
 
+    async def get_total_customer_outstanding(
+        self,
+        tenant_id: uuid.UUID,
+    ) -> Decimal:
+        """Sum of current_balance for all active customers with a positive balance (they owe money)."""
+        stmt = select(
+            func.coalesce(func.sum(Customer.current_balance), Decimal("0"))
+        ).where(
+            and_(
+                Customer.tenant_id == tenant_id,
+                Customer.is_active.is_(True),
+                Customer.deleted_at.is_(None),
+                Customer.current_balance > 0,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one() or Decimal("0")
+
     async def get_low_stock_count(
         self,
         tenant_id: uuid.UUID,

@@ -10,6 +10,7 @@ import RefundModal from '@/features/pos/RefundModal'
 export default function CartPanel({ onBackToProducts }: { onBackToProducts?: () => void }) {
   const items           = useCartStore(s => s.items)
   const discount        = useCartStore(s => s.discount)
+  const discountType    = useCartStore(s => s.discountType)
   const clearCart       = useCartStore(s => s.clearCart)
   const checkoutStep    = useCartStore(s => s.checkoutStep)
   const setCheckoutStep = useCartStore(s => s.setCheckoutStep)
@@ -25,7 +26,7 @@ export default function CartPanel({ onBackToProducts }: { onBackToProducts?: () 
         <RefundModal onClose={() => setShowRefund(false)} />
       )}
 
-      <div className="flex flex-col bg-zinc-950 border-l border-zinc-800 flex-shrink-0 w-full lg:w-80">
+      <div className="flex flex-col h-full bg-zinc-950 border-l border-zinc-800 flex-shrink-0 w-full lg:w-80">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -101,7 +102,11 @@ export default function CartPanel({ onBackToProducts }: { onBackToProducts?: () 
                   <span className="font-mono">{fmt(totals.itemSubtotal + totals.orderDiscAmt)}</span>
                 </div>
                 <div className="flex justify-between text-amber-500">
-                  <span>Discount ({discount}%)</span>
+                  <span>
+                    Discount ({discountType === 'amount'
+                      ? `${discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ks`
+                      : `${discount}%`})
+                  </span>
                   <span className="font-mono">-{fmt(totals.orderDiscAmt)}</span>
                 </div>
               </div>

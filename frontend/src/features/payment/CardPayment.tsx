@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fmt } from '@/lib/utils'
 import { IconCard } from '@/components/icons'
 import { Spinner } from '@/components/ui'
@@ -10,10 +10,18 @@ interface CardPaymentProps {
 
 export default function CardPayment({ total, onProcess }: CardPaymentProps) {
   const [processing, setProcessing] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   function handleCharge() {
     setProcessing(true)
-    setTimeout(() => {
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
       onProcess()
     }, 1500)
   }

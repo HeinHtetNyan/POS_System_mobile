@@ -48,6 +48,8 @@ export interface Product {
   taxRate: number
   barcode: string
   color: string
+  promoDiscountPct: number  // 0 = no active promo; >0 = auto line-discount %
+  promoLabel: string        // e.g. "10% off" or "500 Kyats off"
 }
 // Cart
 

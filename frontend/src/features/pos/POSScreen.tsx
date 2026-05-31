@@ -25,24 +25,43 @@ const HardwareScannerModal = lazy(() =>
   import('@/scanner/ProductScannerModal').then(m => ({ default: m.ProductScannerModal }))
 )
 
+// Check if a product's promotion is currently active
+function getActivePromo(p: import('@/shared/types').Product): { pct: number; label: string } {
+  if (!p.discount_type || !p.discount_value) return { pct: 0, label: '' }
+  const now = Date.now()
+  if (p.discount_start_at && now < new Date(p.discount_start_at).getTime()) return { pct: 0, label: '' }
+  if (p.discount_end_at   && now > new Date(p.discount_end_at).getTime())   return { pct: 0, label: '' }
+  const val = parseFloat(p.discount_value)
+  if (p.discount_type === 'PERCENTAGE') {
+    return { pct: Math.min(100, val), label: `${val}% off` }
+  }
+  const price = parseFloat(p.selling_price)
+  if (!price) return { pct: 0, label: '' }
+  const pct = Math.min(100, (val / price) * 100)
+  return { pct, label: `${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats off` }
+}
+
 // Map backend product + inventory qty to legacy Product shape
 function mapProduct(
   p: import('@/shared/types').Product,
   inventoryMap: Map<string, number>,
   categoryMap: Map<string, string>,
 ): Product {
+  const promo = getActivePromo(p)
   return {
-    id:       p.id,
-    sku:      p.sku,
-    name:     p.name,
-    category: categoryMap.get(p.category_id ?? '') ?? p.category_id ?? 'other',
-    price:    parseFloat(p.selling_price),
-    cost:     parseFloat(p.cost_price),
-    stock:    inventoryMap.get(p.id) ?? 0,
-    unit:     'item',
-    taxRate:  parseFloat(p.tax_rate),
-    barcode:  p.barcode ?? '',
-    color:    '#71717A',
+    id:               p.id,
+    sku:              p.sku,
+    name:             p.name,
+    category:         categoryMap.get(p.category_id ?? '') ?? p.category_id ?? 'other',
+    price:            parseFloat(p.selling_price),
+    cost:             parseFloat(p.cost_price),
+    stock:            inventoryMap.get(p.id) ?? 0,
+    unit:             'item',
+    taxRate:          parseFloat(p.tax_rate),
+    barcode:          p.barcode ?? '',
+    color:            '#71717A',
+    promoDiscountPct: promo.pct,
+    promoLabel:       promo.label,
   }
 }
 

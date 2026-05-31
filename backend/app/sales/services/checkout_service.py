@@ -135,9 +135,19 @@ def _compute_order_totals(
         item_subtotal = item.unit_price * item.quantity
         subtotal += item_subtotal
         item_discount_total += item.discount_amount
-        # Tax computed on (subtotal - item_discount)
+        # Tax computed on (item_subtotal - item_discount) before order discount
         taxable = item_subtotal - item.discount_amount
         tax_amount += taxable * item.tax_rate
+
+    # The order-level discount reduces the tax base proportionally across items.
+    # Without this, the backend charges tax on the order discount itself, causing
+    # a mismatch with the frontend (which applies order discount before tax).
+    # e.g. 100 Ks order discount at 10% tax → 10 Ks overcharge on every order.
+    item_taxable_total = subtotal - item_discount_total
+    if item_taxable_total > Decimal("0") and order_discount > Decimal("0"):
+        effective_disc = min(order_discount, item_taxable_total)
+        # Scale tax down proportionally (works for both uniform and mixed rates)
+        tax_amount = tax_amount * (item_taxable_total - effective_disc) / item_taxable_total
 
     total_discount = item_discount_total + order_discount
     total_amount = subtotal - total_discount + tax_amount

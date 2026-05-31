@@ -180,7 +180,7 @@ function ProofSubmitModal({
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">Currency</label>
-                  <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="MMK" className={inp} />
+                  <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="Kyats" className={inp} />
                 </div>
               </div>
               <div>
@@ -255,7 +255,7 @@ function PlanPickerModal({
                 className={cn('w-full text-left px-4 py-3 rounded-xl border transition-all',
                   selected === plan.id ? 'border-amber-500 bg-amber-500/10' : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800')}>
                 <p className="text-sm font-medium text-zinc-100">{plan.name}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">{plan.currency} {Number(plan.price).toLocaleString()} / {plan.billing_cycle.toLowerCase()}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency} / {plan.billing_cycle.toLowerCase()}</p>
               </button>
             ))
           )}
@@ -369,7 +369,7 @@ function RequestUpgradeModal({ currentPlan, onClose }: { currentPlan: Plan; onCl
                     className={cn('w-full text-left px-4 py-3 rounded-xl border transition-all',
                       selectedPlan?.id === plan.id ? 'border-amber-500 bg-amber-500/10' : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800')}>
                     <p className="text-sm font-medium text-zinc-100">{plan.name}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{plan.currency} {Number(plan.price).toLocaleString()} / {plan.billing_cycle.toLowerCase()}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {plan.currency === 'MMK' ? 'Kyats' : plan.currency} / {plan.billing_cycle.toLowerCase()}</p>
                     {plan.description && <p className="text-xs text-zinc-600 mt-0.5">{plan.description}</p>}
                   </button>
                 ))
@@ -391,7 +391,7 @@ function RequestUpgradeModal({ currentPlan, onClose }: { currentPlan: Plan; onCl
                   <p className="text-sm font-semibold text-amber-400">{selectedPlan?.name}</p>
                 </div>
                 <p className="text-sm text-zinc-300">
-                  {selectedPlan?.currency} {Number(selectedPlan?.price).toLocaleString()} / {selectedPlan?.billing_cycle.toLowerCase()}
+                  {Number(selectedPlan?.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {selectedPlan?.currency === 'MMK' ? 'Kyats' : selectedPlan?.currency} / {selectedPlan?.billing_cycle.toLowerCase()}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -401,7 +401,7 @@ function RequestUpgradeModal({ currentPlan, onClose }: { currentPlan: Plan; onCl
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">Currency</label>
-                  <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="MMK" className={inp} />
+                  <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="Kyats" className={inp} />
                 </div>
               </div>
               <div>
@@ -633,7 +633,7 @@ export default function CurrentSubscriptionPage() {
               <div>
                 <p className="text-zinc-500 text-xs mb-0.5">Price</p>
                 <p className="text-zinc-100 font-medium">
-                  {Number(plan.price) === 0 ? 'Free' : `${plan.currency} ${Number(plan.price).toLocaleString()}`}
+                  {Number(plan.price) === 0 ? 'Free' : `${Number(plan.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${plan.currency === 'MMK' ? 'Kyats' : plan.currency}`}
                   {Number(plan.price) > 0 && <span className="text-zinc-500 text-xs ml-1">/ {plan.billing_cycle.toLowerCase()}</span>}
                 </p>
               </div>

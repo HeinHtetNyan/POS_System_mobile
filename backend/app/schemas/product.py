@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import Field, field_validator
@@ -132,6 +133,10 @@ class ProductCreateRequest(BaseSchema):
     cost_price: Decimal | None = Field(default=None, ge=0)
     selling_price: Decimal | None = Field(default=None, ge=0)
     tax_rate: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    discount_type: str | None = None
+    discount_value: Decimal | None = Field(default=None, ge=0)
+    discount_start_at: datetime | None = None
+    discount_end_at: datetime | None = None
 
 
 class ProductUpdateRequest(BaseSchema):
@@ -147,6 +152,11 @@ class ProductUpdateRequest(BaseSchema):
     selling_price: Decimal | None = Field(default=None, ge=0)
     tax_rate: Decimal | None = Field(default=None, ge=0, le=100)
     is_active: bool | None = None
+    discount_type: str | None = None
+    discount_value: Decimal | None = Field(default=None, ge=0)
+    discount_start_at: datetime | None = None
+    discount_end_at: datetime | None = None
+    clear_discount: bool = False
 
 
 class ProductResponse(TimestampedSchema):
@@ -167,6 +177,10 @@ class ProductResponse(TimestampedSchema):
     is_active: bool
     is_deleted: bool
     sync_version: int
+    discount_type: str | None = None
+    discount_value: Decimal | None = None
+    discount_start_at: datetime | None = None
+    discount_end_at: datetime | None = None
 
 
 class ProductDetailResponse(ProductResponse):

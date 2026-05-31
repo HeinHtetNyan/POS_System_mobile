@@ -189,7 +189,7 @@ export default function PlanFormPage() {
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Currency</label>
                 <select value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))} className={inp}>
-                  <option value="MMK">MMK</option>
+                  <option value="MMK">Kyats</option>
                   <option value="USD">USD</option>
                   <option value="THB">THB</option>
                   <option value="SGD">SGD</option>

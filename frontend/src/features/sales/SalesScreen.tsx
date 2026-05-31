@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { checkoutService, refundService } from '@/services/sales/sales.service'
+import { receiptsService } from '@/services/receipts/receipts.service'
 import { useTenantStore } from '@/store/tenant.store'
 import { fmt, fmtDateTime, timeAgo } from '@/lib/utils'
 import { StatCard, Table, Th, Td, Badge, Empty, Divider, Spinner } from '@/components/ui'
-import { IconSales, IconX, IconSearch, IconRefund } from '@/components/icons'
+import { IconSales, IconX, IconSearch, IconRefund, IconPrint } from '@/components/icons'
+import { ReceiptPrintPreviewModal } from '@/components/hardware/PrintPreviewModal'
 import type { Order, OrderItem, RefundRecord } from '@/shared/types'
 
 type TabFilter = 'all' | 'COMPLETED' | 'REFUNDED'
@@ -13,6 +15,12 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = {
   COMPLETED:          'success',
   REFUNDED:           'warning',
   PARTIALLY_REFUNDED: 'warning',
+}
+
+const PAYMENT_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = {
+  PAID:    'success',
+  PARTIAL: 'warning',
+  PENDING: 'danger',
 }
 
 export default function SalesScreen() {
@@ -158,18 +166,23 @@ export default function SalesScreen() {
                       <Th>Date</Th>
                       <Th right>Total</Th>
                       <Th>Status</Th>
+                      <Th>Payment</Th>
                       <Th>By</Th>
+                      <Th>Customer</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>
+                        <td colSpan={7}>
                           <Empty icon={<IconSales width="40" height="40" />} title="No orders found" subtitle="Adjust your search or filter" />
                         </td>
                       </tr>
                     ) : filteredOrders.map(order => {
                       const isActive = selectedOrder?.id === order.id
+                      const paymentLabel = order.payment_status
+                        ? order.payment_status.charAt(0) + order.payment_status.slice(1).toLowerCase()
+                        : null
                       return (
                         <tr
                           key={order.id}
@@ -189,7 +202,20 @@ export default function SalesScreen() {
                             </Badge>
                           </Td>
                           <Td>
+                            {paymentLabel && (
+                              <Badge variant={PAYMENT_VARIANT[order.payment_status] ?? 'warning'} dot>
+                                {paymentLabel}
+                              </Badge>
+                            )}
+                          </Td>
+                          <Td>
                             <span className="text-xs text-zinc-300">{order.cashier_name ?? '—'}</span>
+                          </Td>
+                          <Td>
+                            {order.customer_name
+                              ? <span className="text-xs text-amber-400 font-medium">{order.customer_name}</span>
+                              : <span className="text-xs text-zinc-600">—</span>
+                            }
                           </Td>
                         </tr>
                       )
@@ -291,10 +317,18 @@ export default function SalesScreen() {
 // Order Detail Panel
 
 function OrderDetailPanel({ order, onClose }: { order: Order; onClose: () => void }) {
+  const [showReprint, setShowReprint] = useState(false)
+
   const { data: detail, isLoading } = useQuery({
     queryKey: ['order-detail', order.id],
     queryFn: () => checkoutService.getOrder(order.id),
     staleTime: 30_000,
+  })
+
+  const { data: receipt } = useQuery({
+    queryKey: ['receipt', 'order', order.id],
+    queryFn: () => receiptsService.getByOrderId(order.id),
+    staleTime: 60_000,
   })
 
   const items: OrderItem[] = (detail?.items ?? []) as OrderItem[]
@@ -397,13 +431,33 @@ function OrderDetailPanel({ order, onClose }: { order: Order; onClose: () => voi
       )}
 
       {order.notes && (
-        <div className="px-4 py-3 flex-shrink-0">
+        <div className="px-4 py-3 border-b border-zinc-800 flex-shrink-0">
           <p className="text-xs text-zinc-500 mb-1">Notes</p>
           <p className="text-xs text-zinc-300">{order.notes}</p>
         </div>
       )}
 
       <div className="flex-1" />
+
+      {/* Reprint button */}
+      <div className="px-4 py-3 border-t border-zinc-800 flex-shrink-0">
+        <button
+          onClick={() => receipt && setShowReprint(true)}
+          disabled={!receipt}
+          className="w-full h-9 flex items-center justify-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <IconPrint width="14" height="14" />
+          Reprint Receipt
+        </button>
+      </div>
+
+      {receipt && showReprint && (
+        <ReceiptPrintPreviewModal
+          receipt={receipt}
+          onClose={() => setShowReprint(false)}
+          autoTrigger={false}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, type FormEvent } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -8,402 +8,14 @@ import { brandsService } from '@/services/brands/brands.service'
 import { inventoryService } from '@/services/inventory/inventory.service'
 import { useTenantStore } from '@/store/tenant.store'
 import { fmt } from '@/lib/utils'
-import { StatCard, Table, Th, Td, Btn, Empty, Spinner, Input } from '@/components/ui'
+import { StatCard, Table, Th, Td, Btn, Empty, Spinner } from '@/components/ui'
 import { IconPlus, IconProducts, IconSearch } from '@/components/icons'
-import { ProductBarcodeCard, RawScannerModal, lookupProductByBarcode } from '@/scanner'
+import { ProductBarcodeCard } from '@/scanner'
 import { LabelPrintPreviewModal } from '@/components/hardware/PrintPreviewModal'
 import type { Product as BackendProduct } from '@/shared/types'
+import { ProductFormModal } from './ProductFormModal'
 
-function generateSKU(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let s = 'SKU-'
-  for (let i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length))
-  return s
-}
-
-interface ProductFormModalProps {
-  product?: BackendProduct
-  categories: { id: string; name: string }[]
-  brands: { id: string; name: string }[]
-  onClose: () => void
-  onSaved: () => void
-}
-
-
-function ProductFormModal({ product, categories, brands, onClose, onSaved }: ProductFormModalProps) {
-  const isEdit = !!product
-  const selectedBranch = useTenantStore(s => s.selectedBranch)
-
-  // For edit: fetch the branch-specific inventory to read the stored reorder_point
-  const { data: invData } = useQuery({
-    queryKey: ['inventory-product', selectedBranch?.id, product?.id],
-    queryFn: () => inventoryService.getBranchInventory(selectedBranch!.id, { product_id: product!.id, page_size: 1 }),
-    enabled: isEdit && !!selectedBranch?.id && !!product?.id,
-    staleTime: 0,
-  })
-
-  const [form, setForm] = useState({
-    sku:           product?.sku           ?? generateSKU(),
-    name:          product?.name          ?? '',
-    description:   product?.description   ?? '',
-    product_type:  'SIMPLE' as const,
-    category_id:   product?.category_id   ?? '',
-    brand_id:      product?.brand_id      ?? '',
-    barcode:       product?.barcode        ?? '',
-    cost_price:    product?.cost_price     ?? '',
-    selling_price: product?.selling_price  ?? '',
-    reorder_point: String(product?.reorder_point ?? 0),
-    is_active:     product?.is_active ?? true,
-    initial_stock: '',
-  })
-  const [saving, setSaving]             = useState(false)
-  const [error,  setError]              = useState<string | null>(null)
-  const [showScanner, setShowScanner]   = useState(false)
-  const [barcodeConflict, setBarcodeConflict] = useState<{ name: string; sku: string } | null>(null)
-  const [barcodeChecking, setBarcodeChecking] = useState(false)
-
-  // Sync reorder_point from BranchInventory once the fetch resolves
-  useEffect(() => {
-    const rp = invData?.items?.[0]?.reorder_point
-    if (rp != null) {
-      setForm(prev => ({ ...prev, reorder_point: String(Math.round(Number(rp))) }))
-    }
-  }, [invData])
-
-  // USB/HID scanner: listen for rapid keystrokes when no input is focused
-  const usbBuffer    = useRef('')
-  const usbLastTime  = useRef(0)
-  const usbTimer     = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleScan = useCallback(async (code: string) => {
-    if (isEdit) {
-      setForm(prev => ({ ...prev, sku: prev.sku || code, barcode: code }))
-      toast.success(`Scanned: ${code}`)
-      return
-    }
-    setBarcodeChecking(true)
-    setBarcodeConflict(null)
-    let conflict: { name: string; sku: string } | null = null
-    try {
-      const result = await lookupProductByBarcode(code)
-      if (result.status === 'found') {
-        conflict = { name: result.product.name, sku: result.product.sku }
-      }
-    } catch { /* network error — allow form fill */ }
-    setBarcodeChecking(false)
-    if (conflict) {
-      setBarcodeConflict(conflict)
-      return
-    }
-    setForm(prev => ({ ...prev, sku: prev.sku || code, barcode: code }))
-    toast.success(`Scanned: ${code}`)
-  }, [isEdit])
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const tag = (document.activeElement as HTMLElement | null)?.tagName ?? ''
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
-      if (e.ctrlKey || e.altKey || e.metaKey) return
-
-      const now = Date.now()
-
-      if (e.key === 'Enter') {
-        const code = usbBuffer.current.trim()
-        usbBuffer.current   = ''
-        usbLastTime.current = 0
-        if (usbTimer.current) { clearTimeout(usbTimer.current); usbTimer.current = null }
-        if (code.length >= 3) handleScan(code)
-        return
-      }
-
-      if (e.key.length === 1) {
-        const gap = now - usbLastTime.current
-        if (usbLastTime.current > 0 && gap > 50) usbBuffer.current = ''
-        usbBuffer.current  += e.key
-        usbLastTime.current = now
-
-        if (usbTimer.current) clearTimeout(usbTimer.current)
-        usbTimer.current = setTimeout(() => {
-          const code = usbBuffer.current.trim()
-          usbBuffer.current   = ''
-          usbLastTime.current = 0
-          usbTimer.current    = null
-          if (code.length >= 3) handleScan(code)
-        }, 200)
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      if (usbTimer.current) clearTimeout(usbTimer.current)
-    }
-  }, [handleScan])
-
-  function set(field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-      setForm(prev => ({ ...prev, [field]: e.target.value }))
-      setError(null)
-    }
-  }
-
-  const canSubmit =
-    form.sku.trim() &&
-    form.name.trim() &&
-    form.cost_price &&
-    form.selling_price &&
-    (isEdit || !!form.category_id) &&
-    !barcodeConflict &&
-    !saving
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!canSubmit) return
-    setSaving(true)
-    setError(null)
-    try {
-      const payload = {
-        sku:           form.sku.trim(),
-        name:          form.name.trim(),
-        description:   form.description.trim() || undefined,
-        product_type:  form.product_type,
-        category_id:   form.category_id || undefined,
-        brand_id:      form.brand_id || undefined,
-        barcode:       form.barcode.trim() || undefined,
-        cost_price:    form.cost_price,
-        selling_price: form.selling_price,
-        reorder_point: parseInt(form.reorder_point || '0', 10),
-      }
-      const reorderPt = parseInt(form.reorder_point || '0', 10)
-      if (isEdit) {
-        await productsService.update(product.id, { ...payload, is_active: form.is_active })
-        // Persist reorder_point to BranchInventory for the selected branch
-        if (selectedBranch && reorderPt >= 0) {
-          try {
-            await inventoryService.setReorderLevels(selectedBranch.id, product.id, {
-              reorder_point: reorderPt,
-              reorder_quantity: 0,
-            })
-          } catch { /* non-fatal: BranchInventory may not exist yet for this branch */ }
-        }
-        toast.success('Product updated')
-      } else {
-        const created = await productsService.create(payload)
-        const qty = parseInt(form.initial_stock || '0', 10)
-        if (selectedBranch) {
-          if (qty > 0) {
-            try {
-              await inventoryService.setOpeningStock({
-                branch_id: selectedBranch.id,
-                items: [{ product_id: created.id, quantity: String(qty), cost_price: form.cost_price }],
-              })
-            } catch {
-              toast.warning('Product created but initial stock could not be set — add it via Inventory.')
-            }
-          }
-          // Always persist reorder_point (backend auto-creates BranchInventory if needed)
-          if (reorderPt > 0) {
-            try {
-              await inventoryService.setReorderLevels(selectedBranch.id, created.id, {
-                reorder_point: reorderPt,
-                reorder_quantity: 0,
-              })
-            } catch { /* non-fatal */ }
-          }
-        }
-        toast.success('Product created')
-      }
-      onSaved()
-      onClose()
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.error?.message ??
-        err?.response?.data?.detail ??
-        'Failed to save product. Please try again.'
-      )
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <>
-    {showScanner && (
-      <RawScannerModal
-        title="Scan Product Barcode"
-        hint="Scan once — fills both SKU and Barcode automatically"
-        onScan={code => { handleScan(code); setShowScanner(false) }}
-        onClose={() => setShowScanner(false)}
-      />
-    )}
-
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 flex-shrink-0">
-          <h2 className="text-base font-semibold text-zinc-100">{isEdit ? 'Edit Product' : 'New Product'}</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 text-xl leading-none">×</button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-6 space-y-4">
-
-          {/* Single scan button */}
-          <button
-            type="button"
-            disabled={barcodeChecking}
-            onClick={() => setShowScanner(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-zinc-700 hover:border-amber-500 hover:text-amber-400 text-zinc-400 text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-              <rect x="7" y="7" width="3" height="10" rx="1"/><rect x="14" y="7" width="3" height="10" rx="1"/>
-            </svg>
-            {barcodeChecking ? 'Checking barcode…' : form.barcode ? `Scanned: ${form.barcode} — tap to re-scan` : 'Tap to scan barcode'}
-          </button>
-
-          {/* Duplicate barcode warning */}
-          {!isEdit && barcodeConflict && (
-            <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-950 border border-amber-800">
-              <span className="shrink-0 text-base leading-none mt-0.5">⚠️</span>
-              <div>
-                <p className="text-xs font-semibold text-amber-400">Barcode already in use</p>
-                <p className="text-xs text-amber-500 mt-0.5">
-                  "{barcodeConflict.name}" ({barcodeConflict.sku}) already has this barcode. Use a different barcode or scan another item.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* SKU — auto-generated (read-only), Barcode — editable / scan-filled */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">SKU</label>
-              <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded-xl px-3 py-2.5">
-                <span className="font-mono text-sm text-amber-400 flex-1">{form.sku}</span>
-                {!isEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setForm(prev => ({ ...prev, sku: generateSKU() }))}
-                    className="text-zinc-500 hover:text-zinc-300 transition-colors"
-                    title="Regenerate SKU"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-            <Input label="Barcode" value={form.barcode} onChange={e => { set('barcode')(e); setBarcodeConflict(null) }} placeholder="auto-filled by scan" />
-          </div>
-
-          <Input label="Name *" value={form.name} onChange={set('name')} placeholder="Product name" required />
-
-          <div>
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">Description</label>
-            <textarea
-              value={form.description}
-              onChange={set('description')}
-              placeholder="Optional description…"
-              rows={2}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-600 text-sm px-3 py-2.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  Category <span className="text-red-400 normal-case">*</span>
-                </label>
-                {categories.length === 0 && (
-                  <Link to="/app/categories" onClick={onClose} className="text-[10px] text-amber-400 hover:text-amber-300">+ Create one</Link>
-                )}
-              </div>
-              <select
-                value={form.category_id}
-                onChange={set('category_id')}
-                required
-                className={`w-full bg-zinc-800 border rounded-xl text-sm px-3 py-2.5 focus:outline-none focus:border-amber-500 ${
-                  !isEdit && !form.category_id ? 'border-zinc-600 text-zinc-500' : 'border-zinc-700 text-zinc-100'
-                }`}
-              >
-                <option value="">— Select Category —</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Brand</label>
-                {brands.length === 0 && (
-                  <Link to="/app/brands" onClick={onClose} className="text-[10px] text-amber-400 hover:text-amber-300">+ Create one</Link>
-                )}
-              </div>
-              <select value={form.brand_id} onChange={set('brand_id')}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-100 text-sm px-3 py-2.5 focus:outline-none focus:border-amber-500">
-                <option value="">— None —</option>
-                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Cost Price *" type="number" min="0" step="0.01" value={form.cost_price} onChange={set('cost_price')} placeholder="0.00" required />
-            <Input label="Selling Price *" type="number" min="0" step="0.01" value={form.selling_price} onChange={set('selling_price')} placeholder="0.00" required />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">
-              Reorder Point
-              <span className="ml-1 text-zinc-600 normal-case font-normal">— alert when stock ≤ this</span>
-            </label>
-            <Input type="number" min="0" step="1" value={form.reorder_point} onChange={set('reorder_point')} placeholder="0" />
-          </div>
-
-          {!isEdit && (
-            <div>
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">
-                Opening Stock
-                <span className="ml-1 text-zinc-600 normal-case font-normal">— how many units you have right now</span>
-              </label>
-              <Input type="number" min="0" step="1" value={form.initial_stock} onChange={set('initial_stock')} placeholder="0" />
-            </div>
-          )}
-
-          {isEdit && (
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_active}
-                onChange={e => setForm(prev => ({ ...prev, is_active: e.target.checked }))}
-                className="w-4 h-4 rounded accent-amber-500"
-              />
-              <span className="text-sm text-zinc-300">Active</span>
-            </label>
-          )}
-
-          {error && (
-            <div className="px-3 py-2.5 rounded-xl bg-red-950 border border-red-800 text-red-400 text-xs">
-              {error}
-            </div>
-          )}
-        </form>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-zinc-800 flex-shrink-0">
-          <Btn variant="secondary" size="lg" fullWidth onClick={onClose} disabled={saving}>Cancel</Btn>
-          <Btn variant="primary" size="lg" fullWidth onClick={handleSubmit as any} disabled={!canSubmit}>
-            {saving ? <><Spinner size={16} /> Saving…</> : isEdit ? 'Save Changes' : 'Create Product'}
-          </Btn>
-        </div>
-      </div>
-    </div>
-    </>
-  )
-}
-
+// ProductFormModal is now in ./ProductFormModal.tsx
 function CategoryBadge({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border bg-zinc-800 border-zinc-700 text-zinc-300">
@@ -416,6 +28,62 @@ function StockBadge({ qty }: { qty: number }) {
   if (qty === 0) return <span className="text-xs px-2 py-0.5 rounded-full bg-red-950 border border-red-800 text-red-400">Out of Stock</span>
   if (qty <= 10) return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-950 border border-amber-800 text-amber-400">Low Stock</span>
   return <span className="text-xs px-2 py-0.5 rounded-full bg-green-950 border border-green-800 text-green-400">In Stock</span>
+}
+
+interface PromoInfo {
+  hasPromo: boolean
+  isActive: boolean
+  isScheduled: boolean
+  isExpired: boolean
+  valueLabel: string   // e.g. "10%" or "500.00 Kyats"
+  startDate: string | null
+  endDate: string | null
+}
+
+function getPromoInfo(product: BackendProduct): PromoInfo {
+  if (!product.discount_type || !product.discount_value) {
+    return { hasPromo: false, isActive: false, isScheduled: false, isExpired: false, valueLabel: '', startDate: null, endDate: null }
+  }
+  const now = Date.now()
+  const start = product.discount_start_at ? new Date(product.discount_start_at).getTime() : null
+  const end   = product.discount_end_at   ? new Date(product.discount_end_at).getTime()   : null
+  const isScheduled = start !== null && now < start
+  const isExpired   = end   !== null && now > end
+  const isActive    = !isScheduled && !isExpired
+  const val = parseFloat(product.discount_value)
+  const valueLabel = product.discount_type === 'PERCENTAGE'
+    ? `${val}%`
+    : `${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats`
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return {
+    hasPromo: true, isActive, isScheduled, isExpired, valueLabel,
+    startDate: product.discount_start_at ? fmtDate(product.discount_start_at) : null,
+    endDate:   product.discount_end_at   ? fmtDate(product.discount_end_at)   : null,
+  }
+}
+
+function PromoBadge({ product }: { product: BackendProduct }) {
+  const p = getPromoInfo(product)
+  if (!p.hasPromo) return <span className="text-zinc-600 text-xs">—</span>
+  if (p.isExpired) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-500 line-through">
+        {p.valueLabel}
+      </span>
+    )
+  }
+  if (p.isScheduled) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-950 border border-blue-800 text-blue-400">
+        {p.valueLabel} · Scheduled
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-950 border border-green-800 text-green-400 font-semibold">
+      {p.valueLabel} off
+    </span>
+  )
 }
 
 const PAGE_SIZE = 50
@@ -496,8 +164,6 @@ export default function ProductsScreen() {
     {showForm && (
       <ProductFormModal
         product={editProduct ?? undefined}
-        categories={categories}
-        brands={brands}
         onClose={() => setShowForm(false)}
         onSaved={() => qc.invalidateQueries({ queryKey: ['products'] })}
       />
@@ -580,13 +246,14 @@ export default function ProductsScreen() {
                     <Th>Category</Th>
                     <Th right>Price</Th>
                     <Th right>Cost</Th>
+                    <Th>Promotion</Th>
                     <Th>Status</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {products.length === 0 ? (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <Empty icon={<IconProducts width="40" height="40" />} title="No products found" subtitle="Try adjusting your search or filter" />
                       </td>
                     </tr>
@@ -610,6 +277,9 @@ export default function ProductsScreen() {
                         </Td>
                         <Td right mono>{fmt(parseFloat(product.selling_price))}</Td>
                         <Td right mono muted>{fmt(parseFloat(product.cost_price))}</Td>
+                        <Td>
+                          <PromoBadge product={product} />
+                        </Td>
                         <Td>
                           {product.is_active
                             ? <span className="text-xs px-2 py-0.5 rounded-full bg-green-950 border border-green-800 text-green-400">Active</span>
@@ -707,6 +377,61 @@ function ProductDetailPanel({
             <p className="font-mono font-bold text-zinc-200">{fmt(parseFloat(product.cost_price))}</p>
           </div>
         </div>
+
+        {/* Promotion / Discount */}
+        {(() => {
+          const promo = getPromoInfo(product)
+          if (!promo.hasPromo) return (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
+              <p className="text-xs text-zinc-500">Promotion</p>
+              <span className="text-xs text-zinc-600">None</span>
+            </div>
+          )
+          return (
+            <div className={`rounded-xl border p-3 flex flex-col gap-2 ${
+              promo.isActive    ? 'bg-green-950/40 border-green-800/60' :
+              promo.isScheduled ? 'bg-blue-950/40  border-blue-800/60'  :
+                                  'bg-zinc-900     border-zinc-800'
+            }`}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-zinc-300">Promotion / Discount</p>
+                {promo.isActive    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 border border-green-600/40 text-green-400 font-semibold">Active</span>}
+                {promo.isScheduled && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20  border border-blue-600/40  text-blue-400  font-semibold">Scheduled</span>}
+                {promo.isExpired   && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700/40  border border-zinc-600/40  text-zinc-500  font-semibold">Expired</span>}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500">Discount</span>
+                <span className={`font-mono text-sm font-bold ${promo.isActive ? 'text-green-400' : promo.isScheduled ? 'text-blue-400' : 'text-zinc-500'}`}>
+                  {promo.valueLabel}
+                  {product.discount_type === 'PERCENTAGE' ? '' : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500">Type</span>
+                <span className="text-xs text-zinc-300">{product.discount_type === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}</span>
+              </div>
+              {(promo.startDate || promo.endDate) && (
+                <div className="pt-1.5 border-t border-zinc-700/40 flex flex-col gap-1">
+                  {promo.startDate && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-500">Start</span>
+                      <span className="text-xs text-zinc-300 font-mono">{promo.startDate}</span>
+                    </div>
+                  )}
+                  {promo.endDate && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-500">End</span>
+                      <span className="text-xs text-zinc-300 font-mono">{promo.endDate}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!promo.startDate && !promo.endDate && (
+                <p className="text-[10px] text-zinc-600">No time limit — always active</p>
+              )}
+            </div>
+          )
+        })()}
 
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex justify-between">

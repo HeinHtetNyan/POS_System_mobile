@@ -18,12 +18,14 @@ from app.api.deps import (
 from app.procurement.schemas import (
     GoodsReceiptCreate,
     GoodsReceiptDetail,
+    GoodsReceiptItemResponse,
     GoodsReceiptSummary,
     PaginatedGoodsReceipts,
     PaginatedPurchaseOrders,
     PaginatedSupplierPayables,
     PurchaseOrderCreate,
     PurchaseOrderDetail,
+    PurchaseOrderItemResponse,
     PurchaseOrderSummary,
     PurchaseOrderUpdate,
     SupplierBalance,
@@ -130,9 +132,16 @@ async def get_purchase_order(
     po = await svc.get_po(po_id, tenant_id)
     actor_ids = {po.created_by} | ({po.approved_by} if po.approved_by else set())
     names = await _user_names(db, actor_ids)
+
     return PurchaseOrderDetail.model_validate(po).model_copy(update={
         "created_by_name": names.get(po.created_by),
         "approved_by_name": names.get(po.approved_by) if po.approved_by else None,
+        "items": [
+            PurchaseOrderItemResponse.model_validate(item).model_copy(update={
+                "product_name": item.product.name if item.product else None,
+            })
+            for item in po.items
+        ],
     })
 
 
@@ -259,6 +268,16 @@ async def get_goods_receipt(
     names = await _user_names(db, {receipt.received_by} if receipt.received_by else set())
     return GoodsReceiptDetail.model_validate(receipt).model_copy(update={
         "received_by_name": names.get(receipt.received_by),
+        "items": [
+            GoodsReceiptItemResponse.model_validate(item).model_copy(update={
+                "product_name": (
+                    item.purchase_order_item.product.name
+                    if item.purchase_order_item and item.purchase_order_item.product
+                    else None
+                ),
+            })
+            for item in receipt.items
+        ],
     })
 
 

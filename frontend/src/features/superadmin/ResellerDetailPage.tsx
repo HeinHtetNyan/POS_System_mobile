@@ -194,7 +194,7 @@ export default function ResellerDetailPage() {
                   </div>
                   <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center">
                     <p className="text-2xl font-bold text-green-400">
-                      {walletQuery.isLoading ? '…' : `MMK ${Number(walletQuery.data?.available_balance ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+                      {walletQuery.isLoading ? '…' : `${Number(walletQuery.data?.available_balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats`}
                     </p>
                     <p className="text-xs text-zinc-500 mt-1">Available Balance</p>
                   </div>
@@ -275,11 +275,11 @@ export default function ResellerDetailPage() {
                   <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Wallet</h3>
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { label: 'Available Balance', value: `MMK ${Number(walletQuery.data.available_balance).toLocaleString('en-US', { maximumFractionDigits: 0 })}`, amber: true },
-                      { label: 'Locked Balance',    value: `MMK ${Number(walletQuery.data.locked_balance).toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
-                      { label: 'Total Paid Out',    value: `MMK ${Number(walletQuery.data.total_paid_out).toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
+                      { label: 'Available Balance', value: `${Number(walletQuery.data.available_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats`, amber: true },
+                      { label: 'Locked Balance',    value: `${Number(walletQuery.data.locked_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats` },
+                      { label: 'Total Paid Out',    value: `${Number(walletQuery.data.total_paid_out).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats` },
                       { label: 'Commission Rate',   value: `${Number(walletQuery.data.commission_rate_pct).toFixed(2)}%` },
-                      { label: 'Min Payout',        value: `MMK ${Number(walletQuery.data.min_payout_amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
+                      { label: 'Min Payout',        value: `${Number(walletQuery.data.min_payout_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats` },
                     ].map(item => (
                       <div key={item.label}>
                         <p className="text-xs text-zinc-500 mb-0.5">{item.label}</p>
@@ -313,7 +313,7 @@ export default function ResellerDetailPage() {
                               {tx.note && <p className="text-xs text-zinc-600 mt-0.5 italic">{tx.note}</p>}
                             </div>
                             <p className={cn('text-sm font-medium flex-shrink-0', isCredit ? 'text-green-400' : 'text-red-400')}>
-                              {isCredit ? '+' : '-'}{tx.currency_code} {Number(tx.amount).toLocaleString()}
+                              {isCredit ? '+' : '-'}{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tx.currency_code === 'MMK' ? 'Kyats' : tx.currency_code}
                             </p>
                           </div>
                         )

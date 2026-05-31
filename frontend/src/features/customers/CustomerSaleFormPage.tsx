@@ -190,7 +190,7 @@ export default function CustomerSaleFormPage() {
           quantity: item.quantity.toString(),
           unit_price: item.unit_price.toFixed(4),
           discount_amount: '0',
-          tax_rate: item.product.tax_rate ?? '0',
+          tax_rate: (parseFloat(item.product.tax_rate ?? '0') / 100).toFixed(4),
         })),
         payments: paid > 0
           ? [{ payment_method: paymentMethod, amount: paid.toFixed(4) }]

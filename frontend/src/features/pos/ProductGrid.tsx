@@ -6,6 +6,7 @@ import { IconProducts } from '@/components/icons'
 import ProductCard from '@/features/pos/ProductCard'
 
 const CARD_MIN_W = 120
+const MAX_COLS   = 7
 const GAP = 8
 const ESTIMATED_ROW_H = 120 // px — generous estimate, measureElement corrects it
 
@@ -31,7 +32,7 @@ export default function ProductGrid({ products, cartItems, onAdd }: ProductGridP
     if (!el) return
     const obs = new ResizeObserver(() => {
       const w = el.clientWidth - GAP * 2
-      setCols(Math.max(1, Math.floor((w + GAP) / (CARD_MIN_W + GAP))))
+      setCols(Math.min(MAX_COLS, Math.max(1, Math.floor((w + GAP) / (CARD_MIN_W + GAP)))))
     })
     obs.observe(el)
     return () => obs.disconnect()

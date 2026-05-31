@@ -129,7 +129,7 @@ function SubmitProofModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Currency</label>
-              <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="MMK"
+              <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} placeholder="Kyats"
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500" />
             </div>
           </div>
@@ -250,7 +250,7 @@ export default function BillingHistoryPage() {
                         <div className="flex items-start justify-between gap-3 flex-wrap">
                           <div className="space-y-0.5">
                             <p className="text-sm font-semibold text-zinc-100">
-                              {proof.currency} {Number(proof.amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                              {Number(proof.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {proof.currency === 'MMK' ? 'Kyats' : proof.currency}
                             </p>
                             {proof.target_plan_name && (
                               <p className="text-xs text-green-400 font-medium">→ {proof.target_plan_name}</p>

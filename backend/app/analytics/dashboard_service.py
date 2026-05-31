@@ -50,6 +50,7 @@ class DashboardService:
         customer_stats = await self.repo.get_customer_stats(tenant_id, month_start)
         low_stock_count = await self.repo.get_low_stock_count(tenant_id, branch_id)
         inventory_value = await self.repo.get_total_inventory_value(tenant_id, branch_id)
+        total_customer_outstanding = await self.repo.get_total_customer_outstanding(tenant_id)
 
         await self.audit.log(
             action=AuditAction.DASHBOARD_VIEWED,
@@ -75,5 +76,6 @@ class DashboardService:
             new_customers_month=int(customer_stats.get("new_customers_month", 0)),
             low_stock_products=low_stock_count,
             inventory_value=Decimal(str(inventory_value)),
+            total_customer_outstanding=Decimal(str(total_customer_outstanding)),
             generated_at=now,
         )

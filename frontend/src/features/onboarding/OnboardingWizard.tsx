@@ -174,7 +174,7 @@ export default function OnboardingWizard() {
                     onChange={e => setCurrency(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-700 rounded-xl text-zinc-100 px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
                   >
-                    <option value="MMK">MMK — Myanmar Kyat</option>
+                    <option value="MMK">Kyats — Myanmar Kyat</option>
                     <option value="USD">USD — US Dollar</option>
                     <option value="EUR">EUR — Euro</option>
                     <option value="GBP">GBP — British Pound</option>

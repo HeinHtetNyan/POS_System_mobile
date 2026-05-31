@@ -96,7 +96,7 @@ function WalletSettingsModal({ resellerId, current, onClose }: { resellerId: str
             className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-orange-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400 mb-1 block">Min Payout Amount (MMK)</label>
+          <label className="text-xs text-zinc-400 mb-1 block">Min Payout Amount (Kyats)</label>
           <input type="number" value={min} onChange={e => setMin(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-orange-500" />
         </div>
@@ -284,7 +284,7 @@ function WalletsTab() {
                 <td className="px-4 py-3 font-mono text-right text-amber-400">{fmt(w.locked_balance)}</td>
                 <td className="px-4 py-3 font-mono text-right text-zinc-400">{fmt(w.total_paid_out)}</td>
                 <td className="px-4 py-3 font-mono text-right text-orange-400">{Number(w.commission_rate_pct).toFixed(2)}%</td>
-                <td className="px-4 py-3 font-mono text-right text-zinc-400">MMK {Number(w.min_payout_amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                <td className="px-4 py-3 font-mono text-right text-zinc-400">{Number(w.min_payout_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Kyats</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2 justify-end">
                     <button onClick={() => setSettingsFor(w)} className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors">Settings</button>

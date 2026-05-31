@@ -133,7 +133,7 @@ export default function BusinessSettingsPage() {
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Currency</label>
               <select disabled={!canEdit} value={form.currency ?? ''} onChange={set('currency')} className={inputCls(!canEdit)}>
-                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {CURRENCIES.map(c => <option key={c} value={c}>{c === 'MMK' ? 'Kyats' : c}</option>)}
               </select>
             </div>
             <div>

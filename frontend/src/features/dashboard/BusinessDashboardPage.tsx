@@ -262,10 +262,10 @@ export default function BusinessDashboardPage() {
             />
           )}
           <KpiCard
-            label="Sales This Week"
-            value={fmt(kpi?.sales_this_week)}
-            sub={`yesterday: ${fmt(kpi?.sales_yesterday)}`}
-            icon="📅"
+            label="Customer Debts"
+            value={fmt(kpi?.total_customer_outstanding)}
+            sub="total outstanding balance"
+            icon="💳"
             isLoading={kpiLoading}
           />
         </div>

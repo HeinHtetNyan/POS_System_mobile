@@ -17,7 +17,7 @@ export function TenantFormatterSync() {
   useEffect(() => {
     if (tenant) {
       setFormatterConfig({
-        currency: tenant.currency,
+        currency: tenant.currency === 'MMK' ? 'Kyats' : tenant.currency,
         locale: tenant.locale,
         timezone: tenant.timezone,
       })

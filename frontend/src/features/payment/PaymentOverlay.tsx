@@ -72,6 +72,7 @@ export default function PaymentOverlay() {
   if (checkoutStep === 'receipt') return <ReceiptScreen />
 
   async function doProcess() {
+    if (isProcessing) return
     if (!activeSession) {
       toast.error('No active session. Please open a session first.')
       setCheckoutStep('cart')
@@ -87,12 +88,15 @@ export default function PaymentOverlay() {
       // Build items for checkout — use tenant tax settings
       const tenantTaxRate    = totals.taxEnabled ? totals.taxRate / 100 : 0
       const checkoutItems = items.map(item => {
-        const lineDiscAmt = ((item.lineDiscount || 0) / 100) * item.price * item.qty
         // For inclusive pricing, send the pre-tax unit price so the backend
-        // formula (price * tax_rate) still yields the correct tax extracted amount
+        // formula (price * tax_rate) still yields the correct tax extracted amount.
+        // lineDiscAmt must use the same unitPrice basis so the backend discount/tax
+        // ratio is consistent — computing it on the gross (inclusive) price would
+        // inflate the discount relative to the net unit_price the backend receives.
         const unitPrice = totals.taxEnabled && totals.taxInclusive
           ? item.price / (1 + tenantTaxRate)
           : item.price
+        const lineDiscAmt = ((item.lineDiscount || 0) / 100) * unitPrice * item.qty
         return {
           product_id:      item.id,
           quantity:        item.qty.toString(),

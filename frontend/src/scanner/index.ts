@@ -1,7 +1,6 @@
 export { ScannerInputCapture } from './ScannerInputCapture'
 export { ProductScannerModal } from './ProductScannerModal'
 export { RawScannerModal } from './RawScannerModal'
-export { FileScannerButton } from './FileScannerButton'
 export { ProductBarcodeCard } from './ProductBarcodeCard'
 export { barcodeService } from './barcode.service'
 export { lookupProductBySku, lookupProductByBarcode } from './useProductScan'

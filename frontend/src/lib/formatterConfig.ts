@@ -5,7 +5,7 @@ interface FormatterConfig {
 }
 
 let _config: FormatterConfig = {
-  currency: 'MMK',
+  currency: 'Kyats',
   locale: 'en-US',
   timezone: 'UTC',
 }
