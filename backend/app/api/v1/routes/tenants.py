@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from app.api.deps import (
     CurrentUser,
@@ -14,6 +15,7 @@ from app.api.deps import (
 from app.core.constants import UserRole
 from app.core.exceptions import AuthorizationError
 from app.core.constants import TenantStatus
+from app.core.upload import delete_receipt_logo, get_receipt_logo_path, save_receipt_logo
 from app.schemas.common import PaginatedResponse, SuccessResponse
 from app.schemas.tenant import (
     TenantCreateRequest,
@@ -173,6 +175,73 @@ async def update_tenant_settings(
     service = TenantService(db)
     settings = await service.update_tenant_settings(tenant_id, payload)
     return TenantSettingsResponse.model_validate(settings)
+
+
+@router.post(
+    "/{tenant_id}/logo",
+    response_model=TenantSettingsResponse,
+    summary="Upload receipt logo (JPEG or PNG, max 2 MB)",
+    dependencies=[Depends(require_tenant_admin)],
+)
+async def upload_tenant_logo(
+    tenant_id: uuid.UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+) -> TenantSettingsResponse:
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        if not current_user.tenant_id or str(current_user.tenant_id) != str(tenant_id):
+            raise AuthorizationError("You can only manage your own tenant's logo")
+    url = await save_receipt_logo(file, tenant_id)
+    service = TenantService(db)
+    settings = await service.update_tenant_settings(
+        tenant_id,
+        TenantSettingsUpdateRequest(extra_settings={"receipt_logo_url": url}),
+    )
+    return TenantSettingsResponse.model_validate(settings)
+
+
+@router.get(
+    "/{tenant_id}/logo",
+    summary="Download receipt logo (authenticated — own tenant only)",
+)
+async def get_tenant_logo(
+    tenant_id: uuid.UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> FileResponse:
+    # Any member of the same tenant can fetch their own logo (needed for receipt preview)
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        if not current_user.tenant_id or str(current_user.tenant_id) != str(tenant_id):
+            raise AuthorizationError("You can only view your own tenant's logo")
+    result = get_receipt_logo_path(tenant_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No logo uploaded for this tenant")
+    path, mime = result
+    return FileResponse(str(path), media_type=mime)
+
+
+@router.delete(
+    "/{tenant_id}/logo",
+    response_model=SuccessResponse,
+    summary="Remove receipt logo",
+    dependencies=[Depends(require_tenant_admin)],
+)
+async def delete_tenant_logo(
+    tenant_id: uuid.UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> SuccessResponse:
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        if not current_user.tenant_id or str(current_user.tenant_id) != str(tenant_id):
+            raise AuthorizationError("You can only manage your own tenant's logo")
+    delete_receipt_logo(tenant_id)
+    service = TenantService(db)
+    await service.update_tenant_settings(
+        tenant_id,
+        TenantSettingsUpdateRequest(extra_settings={"receipt_logo_url": None}),
+    )
+    return SuccessResponse(message="Logo removed successfully")
 
 
 @router.delete(

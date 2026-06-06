@@ -27,4 +27,10 @@ export const authService = {
 
   register: (payload: RegisterRequest) =>
     apiClient.post<RegistrationResponse>('/auth/register', payload).then(r => r.data),
+
+  forgotPassword: (email: string) =>
+    apiClient.post<SuccessResponse>('/auth/forgot-password', { email }).then(r => r.data),
+
+  resetPassword: (token: string, new_password: string) =>
+    apiClient.post<SuccessResponse>('/auth/reset-password', { token, new_password }).then(r => r.data),
 }

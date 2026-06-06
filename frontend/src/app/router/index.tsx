@@ -14,6 +14,8 @@ import { Spinner } from '@/components/ui'
 
 import LoginPage from '@/modules/auth/LoginPage'
 import RegisterPage from '@/modules/auth/RegisterPage'
+import ForgotPasswordPage from '@/modules/auth/ForgotPasswordPage'
+import ResetPasswordPage from '@/modules/auth/ResetPasswordPage'
 const PricingPage      = lazy(() => import('@/modules/public/PricingPage'))
 const OnboardingWizard = lazy(() => import('@/features/onboarding/OnboardingWizard'))
 const TrialExpiredPage = lazy(() => import('@/features/subscription/TrialExpiredPage'))
@@ -164,6 +166,24 @@ export const router = createBrowserRouter([
     element: (
       <AuthLayout>
         <RegisterPage />
+      </AuthLayout>
+    ),
+  },
+
+  {
+    path: '/forgot-password',
+    element: (
+      <AuthLayout>
+        <ForgotPasswordPage />
+      </AuthLayout>
+    ),
+  },
+
+  {
+    path: '/reset-password',
+    element: (
+      <AuthLayout>
+        <ResetPasswordPage />
       </AuthLayout>
     ),
   },

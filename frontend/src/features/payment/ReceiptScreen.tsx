@@ -29,11 +29,12 @@ export default function ReceiptScreen() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const taxEnabled   = !!taxSettings && (taxSettings.tax_rate ?? 0) > 0
-  const taxInclusive = taxSettings?.tax_inclusive ?? false
-  const ex           = taxSettings?.extra_settings as Record<string, unknown> | undefined
-  const taxName      = (ex?.tax_name as string) || 'Tax'
-  const autoPrint    = (ex?.auto_print_receipt as boolean) ?? false
+  const taxEnabled        = !!taxSettings && (taxSettings.tax_rate ?? 0) > 0
+  const taxInclusive      = taxSettings?.tax_inclusive ?? false
+  const ex                = taxSettings?.extra_settings as Record<string, unknown> | undefined
+  const taxName           = (ex?.tax_name as string) || 'Tax'
+  const autoPrint         = (ex?.auto_print_receipt as boolean) ?? false
+  const showTaxOnReceipt  = (ex?.show_tax_on_receipt as boolean) ?? true
 
   // Auto-open print preview once when receipt loads and auto-print is enabled
   const autoPrinted = useRef(false)
@@ -117,7 +118,7 @@ export default function ReceiptScreen() {
                   <span className="font-mono">-{fmt(parseFloat(receipt.discount_amount))}</span>
                 </div>
               )}
-              {taxEnabled && parseFloat(receipt.tax_amount) > 0 && (
+              {taxEnabled && showTaxOnReceipt && parseFloat(receipt.tax_amount) > 0 && (
                 <div className="flex justify-between text-xs text-zinc-500">
                   <span>{taxName}{taxInclusive ? ' (incl.)' : ''}</span>
                   <span className="font-mono">{fmt(parseFloat(receipt.tax_amount))}</span>

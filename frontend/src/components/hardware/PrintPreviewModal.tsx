@@ -7,6 +7,7 @@ import { Label50x30 } from '@/print/Label50x30'
 import type { Receipt, Product } from '@/shared/types'
 import { useAuthStore } from '@/store/auth.store'
 import { tenantService } from '@/services/tenant/tenant.service'
+import apiClient from '@/app/lib/axios'
 
 type ReceiptSize = '58mm' | '80mm'
 type LabelSize = '40x30' | '50x30'
@@ -29,7 +30,27 @@ export function ReceiptPrintPreviewModal({ receipt, onClose, autoTrigger = false
     staleTime: 5 * 60 * 1000,
   })
   const taxInclusive = taxSettings?.tax_inclusive ?? false
-  const taxName = ((taxSettings?.extra_settings as Record<string, unknown> | undefined)?.tax_name as string) || 'Tax'
+  const ex = taxSettings?.extra_settings as Record<string, unknown> | undefined
+  const taxName = (ex?.tax_name as string) || 'Tax'
+  const hasLogo = !!ex?.receipt_logo_url
+  const showTaxOnReceipt = (ex?.show_tax_on_receipt as boolean) ?? true
+
+  // Fetch logo as base64 data URL — embedded inline so it prints reliably in the popup window
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!hasLogo || !tenantId) { setLogoDataUrl(null); return }
+    let cancelled = false
+    apiClient
+      .get(`/tenants/${tenantId}/logo`, { responseType: 'blob' })
+      .then(r => {
+        if (cancelled) return
+        const reader = new FileReader()
+        reader.onload = () => { if (!cancelled) setLogoDataUrl(reader.result as string) }
+        reader.readAsDataURL(r.data)
+      })
+      .catch(() => { if (!cancelled) setLogoDataUrl(null) })
+    return () => { cancelled = true }
+  }, [hasLogo, tenantId])
 
   function handlePrint() {
     const area = printAreaRef.current
@@ -93,8 +114,8 @@ ${pageRule}
         <div className="flex-1 overflow-auto p-5 flex justify-center bg-zinc-900/50">
           <div ref={printAreaRef} className="shadow-lg">
             {size === '58mm'
-              ? <ReceiptTemplate58mm receipt={receipt} taxInclusive={taxInclusive} taxName={taxName} />
-              : <ReceiptTemplate80mm receipt={receipt} taxInclusive={taxInclusive} taxName={taxName} />
+              ? <ReceiptTemplate58mm receipt={receipt} logoUrl={logoDataUrl} taxInclusive={taxInclusive} taxName={taxName} showTaxOnReceipt={showTaxOnReceipt} />
+              : <ReceiptTemplate80mm receipt={receipt} logoUrl={logoDataUrl} taxInclusive={taxInclusive} taxName={taxName} showTaxOnReceipt={showTaxOnReceipt} />
             }
           </div>
         </div>

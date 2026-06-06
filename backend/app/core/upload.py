@@ -19,6 +19,13 @@ _ALLOWED: dict[str, str] = {
     "application/pdf": ".pdf",
 }
 
+# Logo upload: images only, 2 MB max, one file per tenant (overwrites on re-upload)
+_LOGO_ALLOWED: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+}
+_LOGO_MAX_MB = 2
+
 # Magic byte signatures for each allowed MIME type
 _MAGIC_BYTES: list[tuple[bytes, str]] = [
     (b"\xff\xd8\xff", "image/jpeg"),
@@ -88,3 +95,65 @@ async def save_payment_proof(
     )
 
     return f"/uploads/proofs/{tenant_id}/{filename}"
+
+
+async def save_receipt_logo(file: UploadFile, tenant_id: uuid.UUID) -> str:
+    """Validate and save a receipt logo, overwriting any existing one.
+
+    Only JPEG and PNG accepted. Max 2 MB. One logo per tenant.
+    Returns a path like ``/uploads/logos/<tenant_id>.ext``.
+    """
+    content_type = file.content_type or ""
+    if content_type not in _LOGO_ALLOWED:
+        raise ValidationError(
+            f"Unsupported file type '{content_type}'. Allowed: JPEG, PNG"
+        )
+
+    max_bytes = _LOGO_MAX_MB * 1024 * 1024
+    contents = await file.read()
+    if len(contents) > max_bytes:
+        raise ValidationError(f"Logo too large. Maximum size is {_LOGO_MAX_MB} MB.")
+
+    actual_mime = _sniff_mime(contents)
+    if actual_mime not in _LOGO_ALLOWED:
+        raise ValidationError("File contents do not appear to be a valid image.")
+    if actual_mime != content_type:
+        raise ValidationError(
+            f"File contents appear to be '{actual_mime}' but "
+            f"Content-Type declared '{content_type}'."
+        )
+
+    ext = _LOGO_ALLOWED[content_type]
+    logos_dir = _upload_root() / "logos"
+    logos_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove any existing logo for this tenant (handles jpeg↔png switches)
+    for old_ext in _LOGO_ALLOWED.values():
+        old = logos_dir / f"{tenant_id}{old_ext}"
+        if old.exists():
+            old.unlink()
+
+    dest = logos_dir / f"{tenant_id}{ext}"
+    dest.write_bytes(contents)
+
+    logger.info("receipt_logo_saved", tenant_id=str(tenant_id), ext=ext, size=len(contents))
+    return f"/uploads/logos/{tenant_id}{ext}"
+
+
+def delete_receipt_logo(tenant_id: uuid.UUID) -> None:
+    """Remove the receipt logo file for this tenant. Silent if none exists."""
+    logos_dir = _upload_root() / "logos"
+    for ext in _LOGO_ALLOWED.values():
+        path = logos_dir / f"{tenant_id}{ext}"
+        if path.exists():
+            path.unlink()
+
+
+def get_receipt_logo_path(tenant_id: uuid.UUID) -> tuple[Path, str] | None:
+    """Return (file_path, mime_type) if a logo file exists, else None."""
+    logos_dir = _upload_root() / "logos"
+    for mime, ext in _LOGO_ALLOWED.items():
+        path = logos_dir / f"{tenant_id}{ext}"
+        if path.exists():
+            return path, mime
+    return None

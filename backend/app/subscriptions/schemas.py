@@ -38,6 +38,8 @@ class PlanCreateRequest(BaseSchema):
     is_public: bool = True
     sort_order: int = 0
     is_referral_plan: bool = False
+    is_custom: bool = False
+    contact_links: dict | None = None
     entitlements: list[PlanEntitlementCreate] = Field(default_factory=list)
 
     @field_validator("price", mode="before")
@@ -58,6 +60,8 @@ class PlanUpdateRequest(BaseSchema):
     is_public: bool | None = None
     sort_order: int | None = None
     is_referral_plan: bool | None = None
+    is_custom: bool | None = None
+    contact_links: dict | None = None
     entitlements: list[PlanEntitlementCreate] | None = None
 
     @field_validator("price", mode="before")
@@ -81,6 +85,8 @@ class PlanResponse(TimestampedSchema):
     is_public: bool
     sort_order: int
     is_referral_plan: bool
+    is_custom: bool
+    contact_links: dict | None
     entitlements: list[PlanEntitlementResponse]
 
 

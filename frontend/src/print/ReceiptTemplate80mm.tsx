@@ -4,14 +4,15 @@ import type { Receipt } from '@/shared/types'
 interface Props {
   receipt: Receipt
   footer?: string
-  showLogo?: boolean
+  logoUrl?: string | null
   taxInclusive?: boolean
   taxName?: string
+  showTaxOnReceipt?: boolean
 }
 
 // 80mm thermal receipt — standard width for most full-size POS printers.
 // Width ~530px equivalent; use @page { size: 80mm auto }.
-export function ReceiptTemplate80mm({ receipt, footer = 'Thank you for your purchase!', showLogo = false, taxInclusive = false, taxName = 'Tax' }: Props) {
+export function ReceiptTemplate80mm({ receipt, footer = 'Thank you for your purchase!', logoUrl, taxInclusive = false, taxName = 'Tax', showTaxOnReceipt = true }: Props) {
   return (
     <div
       className="print-sheet"
@@ -28,8 +29,12 @@ export function ReceiptTemplate80mm({ receipt, footer = 'Thank you for your purc
     >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-        {showLogo && (
-          <div style={{ fontSize: '20px', marginBottom: '2px' }}>🏪</div>
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt="logo"
+            style={{ maxHeight: '50px', maxWidth: '100%', objectFit: 'contain', display: 'block', margin: '0 auto 6px' }}
+          />
         )}
         <div style={{ fontWeight: 'bold', fontSize: '16px', letterSpacing: '0.5px' }}>
           {receipt.tenant_name}
@@ -81,7 +86,7 @@ export function ReceiptTemplate80mm({ receipt, footer = 'Thank you for your purc
         {parseFloat(receipt.discount_amount) > 0 && (
           <Row label="Discount" value={`-${fmt(parseFloat(receipt.discount_amount))}`} />
         )}
-        {parseFloat(receipt.tax_amount) > 0 && (
+        {showTaxOnReceipt && parseFloat(receipt.tax_amount) > 0 && (
           <Row label={taxInclusive ? `${taxName} (incl.)` : taxName} value={fmt(parseFloat(receipt.tax_amount))} />
         )}
         <Divider />

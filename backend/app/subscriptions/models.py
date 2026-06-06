@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,8 @@ class SubscriptionPlan(Base):
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_referral_plan: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_custom: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    contact_links: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     entitlements: Mapped[list[PlanEntitlement]] = relationship(
         "PlanEntitlement", back_populates="plan", cascade="all, delete-orphan"

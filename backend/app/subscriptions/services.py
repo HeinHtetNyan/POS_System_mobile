@@ -90,6 +90,8 @@ class PlanService:
             is_trial=data.is_trial,
             is_public=data.is_public,
             sort_order=data.sort_order,
+            is_custom=data.is_custom,
+            contact_links=data.contact_links,
         )
         self.session.add(plan)
         await self.session.flush()
@@ -147,6 +149,10 @@ class PlanService:
             plan.is_public = data.is_public
         if data.sort_order is not None:
             plan.sort_order = data.sort_order
+        if data.is_custom is not None:
+            plan.is_custom = data.is_custom
+        if data.contact_links is not None:
+            plan.contact_links = data.contact_links
 
         # Guard: still only one active trial plan allowed after update
         becoming_trial = data.is_trial is True and not plan.is_trial
@@ -833,6 +839,18 @@ class PaymentProofService:
         )
         return list(result.scalars().all())
 
+    async def _get_tenant_owner_email(self, tenant_id: uuid.UUID) -> str | None:
+        from sqlalchemy import select
+        from app.models.user import User
+        result = await self.session.execute(
+            select(User.email).where(
+                User.tenant_id == tenant_id,
+                User.role == UserRole.BUSINESS_OWNER,
+                User.is_deleted.is_(False),
+            ).limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def _notify_silent(self, *, user_ids: list, **kwargs) -> None:
         """Fire a notification; skipped when no recipients. Never raises."""
         if not user_ids:
@@ -1335,6 +1353,42 @@ class PaymentProofService:
                     proof_id=str(proof_id),
                     error=str(exc),
                 )
+
+        # Send receipt email to business owner
+        try:
+            owner_email = await self._get_tenant_owner_email(sub.tenant_id)
+            if owner_email:
+                from app.notifications.email import send_subscription_receipt_email
+                _action_labels = {
+                    ProofActionType.RENEWAL: "Renewal",
+                    ProofActionType.UPGRADE: "Upgrade",
+                    ProofActionType.DOWNGRADE: "Downgrade",
+                    ProofActionType.INITIAL_ACTIVATION: "Activation",
+                }
+                # For UPGRADE/DOWNGRADE, the receipt is for the target plan
+                if action in {ProofActionType.UPGRADE, ProofActionType.DOWNGRADE} and proof.target_plan:
+                    receipt_plan = proof.target_plan
+                else:
+                    receipt_plan = sub.plan
+                tenant_name = proof.tenant.name if proof.tenant else str(sub.tenant_id)
+                plan_name = receipt_plan.name if receipt_plan else "Unknown Plan"
+                plan_price = str(receipt_plan.price) if receipt_plan else "—"
+                started_str = sub.started_at.strftime("%B %d, %Y") if sub.started_at else "—"
+                expires_str_receipt = sub.expires_at.strftime("%B %d, %Y") if sub.expires_at else "—"
+                await send_subscription_receipt_email(
+                    to=owner_email,
+                    tenant_name=tenant_name,
+                    plan_name=plan_name,
+                    plan_price=plan_price,
+                    currency=proof.currency,
+                    started_at=started_str,
+                    expires_at=expires_str_receipt,
+                    paid_amount=str(proof.amount),
+                    reference_number=proof.reference_number or None,
+                    action_label=_action_labels.get(action, "Receipt"),
+                )
+        except Exception as _exc:
+            logger.warning("subscription_receipt_email_failed", error=str(_exc))
 
         loaded = await self.proof_repo.get_by_id(proof.id)
         return loaded or proof

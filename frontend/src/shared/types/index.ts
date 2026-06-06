@@ -537,6 +537,13 @@ export interface PlanEntitlement {
   updated_at: string
 }
 
+export interface ContactLinks {
+  viber?: string | null
+  telegram?: string | null
+  facebook?: string | null
+  tiktok?: string | null
+}
+
 export interface Plan {
   id: string
   name: string
@@ -548,6 +555,8 @@ export interface Plan {
   trial_days: number
   is_active: boolean
   is_referral_plan: boolean
+  is_custom: boolean
+  contact_links: ContactLinks | null
   sort_order: number
   entitlements: PlanEntitlement[]
   created_at: string
@@ -656,6 +665,8 @@ export interface PlanCreateRequest {
   trial_days?: number
   is_active?: boolean
   is_referral_plan?: boolean
+  is_custom?: boolean
+  contact_links?: ContactLinks | null
   sort_order?: number
   entitlements?: { feature_code: string; enabled: boolean; limit_value?: number | null }[]
 }
@@ -669,6 +680,8 @@ export interface PlanUpdateRequest {
   trial_days?: number
   is_active?: boolean
   is_referral_plan?: boolean
+  is_custom?: boolean
+  contact_links?: ContactLinks | null
   sort_order?: number
   entitlements?: { feature_code: string; enabled: boolean; limit_value?: number | null }[]
 }

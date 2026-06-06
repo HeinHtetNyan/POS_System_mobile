@@ -131,14 +131,21 @@ export default function LoginPage() {
                 <p className="text-[11px] text-zinc-600 -mt-1">
                   Business owners, resellers, and admins sign in here.
                 </p>
-                <PasswordInput
-                  label="Password"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); clearError() }}
-                  placeholder="Enter password"
-                  autoComplete="current-password"
-                  required
-                />
+                <div>
+                  <PasswordInput
+                    label="Password"
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); clearError() }}
+                    placeholder="Enter password"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <div className="text-right mt-1">
+                    <Link to="/forgot-password" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
+                      Forgot password?
+                    </Link>
+                  </div>
+                </div>
               </>
             ) : (
               <>

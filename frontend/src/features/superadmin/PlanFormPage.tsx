@@ -66,8 +66,9 @@ export default function PlanFormPage() {
   const [form, setForm] = useState({
     name: '', code: '', description: '', billing_cycle: 'MONTHLY',
     price: '', currency: 'MMK', trial_days: '14', sort_order: '0', is_active: true,
-    is_referral_plan: false,
+    is_referral_plan: false, is_custom: false,
   })
+  const [contactLinks, setContactLinks] = useState({ viber: '', telegram: '', facebook: '', tiktok: '' })
   const [entitlements, setEntitlements] = useState<EntRow[]>(buildDefaultEntitlements)
 
   const { data: existingPlan, isLoading: planLoading } = useQuery({
@@ -89,6 +90,13 @@ export default function PlanFormPage() {
       sort_order:       String(existingPlan.sort_order),
       is_active:        existingPlan.is_active,
       is_referral_plan: existingPlan.is_referral_plan,
+      is_custom:        existingPlan.is_custom ?? false,
+    })
+    setContactLinks({
+      viber:    existingPlan.contact_links?.viber    ?? '',
+      telegram: existingPlan.contact_links?.telegram ?? '',
+      facebook: existingPlan.contact_links?.facebook ?? '',
+      tiktok:   existingPlan.contact_links?.tiktok   ?? '',
     })
     setEntitlements(mergeEntitlements(existingPlan.entitlements))
   }, [existingPlan])
@@ -126,6 +134,13 @@ export default function PlanFormPage() {
       sort_order:       Number(form.sort_order),
       is_active:        form.is_active,
       is_referral_plan: form.is_referral_plan,
+      is_custom:        form.is_custom,
+      contact_links:    form.is_custom ? {
+        viber:    contactLinks.viber.trim()    || null,
+        telegram: contactLinks.telegram.trim() || null,
+        facebook: contactLinks.facebook.trim() || null,
+        tiktok:   contactLinks.tiktok.trim()   || null,
+      } : null,
       entitlements:     entitlements.map(e => ({
         feature_code: e.feature_code,
         enabled: e.enabled,
@@ -223,8 +238,41 @@ export default function PlanFormPage() {
                   <p className="text-[11px] text-zinc-500 mt-0.5">Users who register with a reseller promo code are placed on this plan. Only one plan should have this flag.</p>
                 </div>
               </div>
+              <div className="flex items-start gap-2 pt-1">
+                <input type="checkbox" id="is_custom" checked={form.is_custom}
+                  onChange={e => setForm(p => ({ ...p, is_custom: e.target.checked }))} className="rounded mt-0.5" />
+                <div>
+                  <label htmlFor="is_custom" className="text-sm text-zinc-300 cursor-pointer select-none">Custom Plan</label>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">Shows a "Contact Us" card instead of a subscribe button. Used for enterprise or custom pricing arrangements.</p>
+                </div>
+              </div>
             </div>
           </div>
+
+          {form.is_custom && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100">Contact Links</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">Social / messaging links shown on the plan card. Leave blank to hide a platform.</p>
+              </div>
+              {([
+                { key: 'viber',    label: 'Viber URL',    placeholder: 'viber://chat?number=+95...' },
+                { key: 'telegram', label: 'Telegram URL',  placeholder: 'https://t.me/yourusername' },
+                { key: 'facebook', label: 'Facebook URL',  placeholder: 'https://facebook.com/yourpage' },
+                { key: 'tiktok',   label: 'TikTok URL',    placeholder: 'https://tiktok.com/@youraccount' },
+              ] as const).map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-xs text-zinc-400 mb-1">{label}</label>
+                  <input
+                    value={contactLinks[key]}
+                    onChange={e => setContactLinks(p => ({ ...p, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className={inp}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 border-b border-zinc-800">

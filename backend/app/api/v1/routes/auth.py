@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
 
 from app.api.deps import (
     ClientIp,
@@ -10,11 +10,14 @@ from app.api.deps import (
     UserAgent,
 )
 from app.core.config import settings
-from app.core.rate_limit import check_registration_rate_limit
+from app.core.rate_limit import check_rate_limit, check_registration_rate_limit
 from app.db.redis import get_redis
+from app.notifications.email import send_password_reset_email
 from app.schemas.auth import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
+    ResetPasswordRequest,
     TokenResponse,
 )
 from app.schemas.common import SuccessResponse
@@ -143,6 +146,51 @@ async def change_password(
 @router.get("/me", response_model=UserResponse, summary="Get current user profile")
 async def get_me(current_user: CurrentUser) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/forgot-password", response_model=SuccessResponse, summary="Request a password reset link")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    request_id: RequestId,
+    ip: ClientIp,
+    redis=Depends(get_redis),
+) -> SuccessResponse:
+    # Rate limit: 5 attempts per email per hour to prevent abuse
+    await check_rate_limit(
+        redis=redis,
+        key=f"rate:forgot_password:{payload.email.lower()}",
+        max_requests=5,
+        window_seconds=3600,
+        error_message="Too many password reset requests. Please try again in an hour.",
+    )
+    service = AuthService(db)
+    result = await service.create_password_reset_token(
+        email=payload.email.lower().strip(),
+        request_id=request_id,
+    )
+    if result:
+        email, raw_token = result
+        # Email is sent AFTER the DB session commits (BackgroundTask runs post-response)
+        background_tasks.add_task(send_password_reset_email, email, raw_token)
+    # Always return the same message to prevent user enumeration
+    return SuccessResponse(message="If an account with that email exists, a password reset link has been sent.")
+
+
+@router.post("/reset-password", response_model=SuccessResponse, summary="Reset password using a reset token")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: DbSession,
+    request_id: RequestId,
+) -> SuccessResponse:
+    service = AuthService(db)
+    await service.reset_password(
+        token=payload.token,
+        new_password=payload.new_password,
+        request_id=request_id,
+    )
+    return SuccessResponse(message="Password reset successfully. You can now log in with your new password.")
 
 
 @router.post("/register", response_model=RegistrationResponse, status_code=201, summary="Self-service business registration")

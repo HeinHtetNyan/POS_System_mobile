@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "json"
     LOG_FILE: str = "logs/app.log"
 
+    # Email / Mailtrap
+    EMAIL_ENABLED: bool = True
+    MAILTRAP_API_TOKEN: str = ""
+    EMAIL_FROM: str = "noreply@demo.com"        # TODO: change to your real sender email
+    EMAIL_FROM_NAME: str = "POS System"         # TODO: change to your real sender name
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 15
+
     # Super Admin seed
     SUPER_ADMIN_EMAIL: str = "superadmin@pos-saas.com"
     SUPER_ADMIN_PASSWORD: str
