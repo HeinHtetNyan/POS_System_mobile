@@ -1,122 +1,66 @@
-# Python
-__pycache__/
+# Miscellaneous
+*.class
+*.log
 *.pyc
-*.pyo
-*.pyd
-.Python
-build/
-dist/
-*.egg-info/
-.eggs/
-*.egg
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
 
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
 
-# Environment / secrets
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android — machine-specific / secrets (NEVER commit these)
+/android/local.properties
+/android/key.properties
+*.jks
+*.keystore
+/android/app/google-services.json
+GoogleService-Info.plist
+
+# Environment files
 .env
-.env.local
-.env.*.local
-.env.development
-.env.test
-.env.production
-.env.staging
+.env.*
 *.env
 
-# IDE
-.idea/
+# VS Code (un-comment the line above if you don't want it tracked)
 .vscode/
-.cursor/
-*.swp
-*.swo
 
-# Claude Code session data
-.claude/
-
-# Testing
-tests/
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-coverage.xml
-
-# Type checking / linting
-.mypy_cache/
-.ruff_cache/
-
-# Logs
-logs/
-*.log
-
-# Database
-*.db
-*.sqlite3
-*.sql
-*.dump
-*.sql.gz
-postgres_data/
-
-# SSL / TLS certificates
-*.pem
-*.key
-*.crt
-*.csr
-*.p12
-*.pfx
-nginx/certs/
-
-# Docker
-.docker/
-docker-compose.override.yml
-
-# Redis
-dump.rdb
-*.rdb
-
-# Celery runtime files
-celerybeat-schedule
-celerybeat.pid
-
-# User-uploaded files (payment proofs, etc.)
-uploads/
-backend/uploads/
-
-# Frontend
-node_modules/
-frontend/dist/
-frontend/build/
-*.tsbuildinfo
-frontend/.vite/
-
-# Temporary / backup files
-*.bak
-*.backup
-*.tmp
-tmp/
-temp/
-
-# OS
-.DS_Store
-Thumbs.db
+# macOS
 .fuse_hidden*
 .~lock.*
-
-# Profiling / benchmark output
-*.prof
-benchmark_results*.json
-
-# direnv
-.envrc
-
-# Secrets / credential files
-secrets/
-*.secret
-*.secrets
-
-# Python version management (pyenv)
-.python-version
+Thumbs.db
