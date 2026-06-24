@@ -1,28 +1,100 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:usb_serial/usb_serial.dart';
 import '../../models/order_model.dart';
 import '../utils/currency_formatter.dart';
 
 // Supports:
-//   - Bluetooth ESC/POS printers (via flutter_blue_plus)
-//   - WiFi ESC/POS printers (via raw TCP socket)
-// Cash drawer: pulse is sent as an ESC/POS command after receipt.
+//   - USB thermal printers (usb_serial — Android USB Host)
+//   - Serial printers via USB-to-Serial adapters (usb_serial — CH340/PL2303/FTDI/CP21xx)
+//   - Bluetooth ESC/POS printers (flutter_blue_plus)
+//   - WiFi/LAN ESC/POS printers (raw TCP socket)
+// Cash drawer: pulse sent as ESC/POS command after receipt.
 
 class PrinterService {
   static final PrinterService _instance = PrinterService._internal();
   factory PrinterService() => _instance;
   PrinterService._internal();
 
+  // USB / Serial (both use usb_serial on Android)
+  UsbPort? _usbPort;
+  _UsbMode? _usbMode;
+
+  // Bluetooth
   BluetoothDevice? _connectedBtDevice;
   BluetoothCharacteristic? _printCharacteristic;
 
-  // Bluetooth
+  // ─── Connection status ───────────────────────────────────────────────
+
+  bool get isUsbConnected => _usbPort != null;
+  bool get isSerialConnected => _usbPort != null && _usbMode == _UsbMode.serial;
+  bool get isBtConnected => _printCharacteristic != null;
+  bool get isAnyConnected => isUsbConnected || isBtConnected;
+
+  // ─── USB (direct USB thermal printer) ───────────────────────────────
+
+  Future<List<UsbDevice>> listUsbDevices() => UsbSerial.listDevices();
+
+  Future<bool> connectUsb(UsbDevice device) async {
+    await disconnectUsb();
+    try {
+      _usbPort = await device.create();
+      if (_usbPort == null) return false;
+      if (!await _usbPort!.open()) {
+        _usbPort = null;
+        return false;
+      }
+      await _usbPort!.setDTR(true);
+      await _usbPort!.setRTS(true);
+      await _usbPort!.setPortParameters(
+        38400, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE,
+      );
+      _usbMode = _UsbMode.usb;
+      return true;
+    } catch (_) {
+      _usbPort = null;
+      return false;
+    }
+  }
+
+  // ─── Serial (USB-to-Serial adapter: CH340/PL2303/FTDI/CP21xx) ───────
+
+  Future<bool> connectSerial(UsbDevice device) async {
+    await disconnectUsb();
+    try {
+      _usbPort = await device.create();
+      if (_usbPort == null) return false;
+      if (!await _usbPort!.open()) {
+        _usbPort = null;
+        return false;
+      }
+      await _usbPort!.setDTR(true);
+      await _usbPort!.setRTS(true);
+      await _usbPort!.setPortParameters(
+        9600, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE,
+      );
+      _usbMode = _UsbMode.serial;
+      return true;
+    } catch (_) {
+      _usbPort = null;
+      return false;
+    }
+  }
+
+  Future<void> disconnectUsb() async {
+    try { await _usbPort?.close(); } catch (_) {}
+    _usbPort = null;
+    _usbMode = null;
+  }
+
+  // ─── Bluetooth ────────────────────────────────────────────────────────
+
   Future<List<BluetoothDevice>> scanBluetooth(
       {Duration timeout = const Duration(seconds: 5)}) async {
     final results = <BluetoothDevice>[];
-    final subscription =
-        FlutterBluePlus.scanResults.listen((scanResults) {
+    final sub = FlutterBluePlus.scanResults.listen((scanResults) {
       for (final r in scanResults) {
         if (!results.any((d) => d.remoteId == r.device.remoteId)) {
           results.add(r.device);
@@ -31,7 +103,7 @@ class PrinterService {
     });
     await FlutterBluePlus.startScan(timeout: timeout);
     await Future.delayed(timeout);
-    await subscription.cancel();
+    await sub.cancel();
     return results;
   }
 
@@ -39,7 +111,6 @@ class PrinterService {
     try {
       await device.connect(autoConnect: false);
       _connectedBtDevice = device;
-
       final services = await device.discoverServices();
       for (final service in services) {
         for (final char in service.characteristics) {
@@ -61,15 +132,16 @@ class PrinterService {
     _printCharacteristic = null;
   }
 
-  // WiFi / LAN printing
+  // ─── WiFi / LAN ──────────────────────────────────────────────────────
+
   Future<bool> printViaWifi({
     required String ipAddress,
     required int port,
     required List<int> data,
   }) async {
     try {
-      final socket =
-          await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(
+          ipAddress, port, timeout: const Duration(seconds: 5));
       socket.add(data);
       await socket.flush();
       await socket.close();
@@ -79,97 +151,100 @@ class PrinterService {
     }
   }
 
-  // ESC/POS receipt builder
-  List<int> buildReceipt(OrderModel order, {String? businessName, String? footer}) {
+  // ─── ESC/POS receipt builder ─────────────────────────────────────────
+
+  List<int> buildReceipt(OrderModel order,
+      {String? businessName, String? footer}) {
     final bytes = <int>[];
 
-    // Initialize printer
-    bytes.addAll([0x1B, 0x40]); // ESC @
+    bytes.addAll([0x1B, 0x40]); // ESC @ — init
+    bytes.addAll([0x1B, 0x61, 0x01]); // center
 
-    // Center alignment
-    bytes.addAll([0x1B, 0x61, 0x01]);
+    // Business name
+    bytes.addAll([0x1B, 0x45, 0x01]);
+    bytes.addAll([0x1D, 0x21, 0x11]);
+    bytes.addAll(_encode('${businessName ?? 'SawYun POS'}\n'));
+    bytes.addAll([0x1D, 0x21, 0x00]);
+    bytes.addAll([0x1B, 0x45, 0x00]);
 
-    // Business name (bold, large)
-    bytes.addAll([0x1B, 0x45, 0x01]); // Bold on
-    bytes.addAll([0x1D, 0x21, 0x11]); // Double height+width
-    bytes.addAll(_encodeText('${businessName ?? 'SawYun POS'}\n'));
-    bytes.addAll([0x1D, 0x21, 0x00]); // Normal size
-    bytes.addAll([0x1B, 0x45, 0x00]); // Bold off
+    bytes.addAll(_encode('--------------------------------\n'));
+    bytes.addAll(_encode('Order: ${order.orderNumber}\n'));
+    bytes.addAll(_encode('--------------------------------\n'));
 
-    // Order info
-    bytes.addAll(_encodeText('--------------------------------\n'));
-    bytes.addAll(_encodeText('Order: ${order.orderNumber}\n'));
-    bytes.addAll(_encodeText('--------------------------------\n'));
-
-    // Left alignment for items
-    bytes.addAll([0x1B, 0x61, 0x00]);
-
+    bytes.addAll([0x1B, 0x61, 0x00]); // left
     for (final item in order.items) {
       final name = item.displayName.length > 20
           ? item.displayName.substring(0, 20)
           : item.displayName;
-      final qty = 'x${item.quantityOrdered}';
-      final total = CurrencyFormatter.formatCompact(item.lineTotal);
-      bytes.addAll(_encodeText(
-          '$name\n  $qty @ ${CurrencyFormatter.formatCompact(item.unitPrice)}  $total\n'));
+      bytes.addAll(_encode(
+        '$name\n  x${item.quantityOrdered} @ '
+        '${CurrencyFormatter.formatCompact(item.unitPrice)}  '
+        '${CurrencyFormatter.formatCompact(item.lineTotal)}\n',
+      ));
     }
 
-    bytes.addAll(_encodeText('--------------------------------\n'));
-
-    // Totals (right-aligned using padding)
-    bytes.addAll(_encodeText(_padLine('Subtotal:', CurrencyFormatter.formatCompact(order.grossTotal))));
+    bytes.addAll(_encode('--------------------------------\n'));
+    bytes.addAll(_encode(_pad('Subtotal:', CurrencyFormatter.formatCompact(order.grossTotal))));
     if (order.taxTotal > 0) {
-      bytes.addAll(_encodeText(_padLine('Tax:', CurrencyFormatter.formatCompact(order.taxTotal))));
+      bytes.addAll(_encode(_pad('Tax:', CurrencyFormatter.formatCompact(order.taxTotal))));
     }
     if (order.discountTotal > 0) {
-      bytes.addAll(_encodeText(_padLine('Discount:', '-${CurrencyFormatter.formatCompact(order.discountTotal)}')));
+      bytes.addAll(_encode(_pad('Discount:', '-${CurrencyFormatter.formatCompact(order.discountTotal)}')));
     }
-    bytes.addAll([0x1B, 0x45, 0x01]); // Bold
-    bytes.addAll(_encodeText(_padLine('TOTAL:', CurrencyFormatter.format(order.netTotal))));
+    bytes.addAll([0x1B, 0x45, 0x01]);
+    bytes.addAll(_encode(_pad('TOTAL:', CurrencyFormatter.format(order.netTotal))));
     bytes.addAll([0x1B, 0x45, 0x00]);
 
-    // Payment method
     if (order.payments.isNotEmpty) {
-      bytes.addAll(_encodeText('--------------------------------\n'));
+      bytes.addAll(_encode('--------------------------------\n'));
       for (final p in order.payments) {
-        bytes.addAll(_encodeText(
-            _padLine('${PaymentMethod.displayName(p.paymentMethod)}:',
-                CurrencyFormatter.formatCompact(p.amount))));
+        bytes.addAll(_encode(
+          _pad('${PaymentMethod.displayName(p.paymentMethod)}:',
+              CurrencyFormatter.formatCompact(p.amount)),
+        ));
       }
     }
 
-    // Footer
-    bytes.addAll([0x1B, 0x61, 0x01]); // Center
-    bytes.addAll(_encodeText('\n${footer ?? 'Thank you for your purchase!'}\n'));
-    bytes.addAll(_encodeText('\n\n\n'));
-
-    // Cut paper
-    bytes.addAll([0x1D, 0x56, 0x00]); // Full cut
+    bytes.addAll([0x1B, 0x61, 0x01]); // center
+    bytes.addAll(_encode('\n${footer ?? 'Thank you for your purchase!'}\n'));
+    bytes.addAll(_encode('\n\n\n'));
+    bytes.addAll([0x1D, 0x56, 0x00]); // full cut
 
     return bytes;
   }
 
-  // Open cash drawer (pin 2 or pin 5)
-  List<int> openCashDrawerCommand() {
-    return [0x1B, 0x70, 0x00, 0x19, 0x19]; // Pulse pin 2
-  }
+  List<int> openCashDrawerCommand() => [0x1B, 0x70, 0x00, 0x19, 0x19];
 
-  Future<bool> printReceipt(OrderModel order,
-      {String? businessName, String? footer, bool openDrawer = false}) async {
-    final data = buildReceipt(order,
-        businessName: businessName, footer: footer);
-    if (openDrawer) {
-      data.addAll(openCashDrawerCommand());
+  // ─── Print receipt (routes to connected transport) ───────────────────
+  // Priority: USB/Serial > Bluetooth > WiFi (explicit params required)
+
+  Future<bool> printReceipt(
+    OrderModel order, {
+    String? businessName,
+    String? footer,
+    bool openDrawer = false,
+    String? wifiIp,
+    int wifiPort = 9100,
+  }) async {
+    final data = buildReceipt(order, businessName: businessName, footer: footer);
+    if (openDrawer) data.addAll(openCashDrawerCommand());
+
+    // USB / Serial
+    if (_usbPort != null) {
+      try {
+        await _usbPort!.write(Uint8List.fromList(data));
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
+    // Bluetooth
     if (_printCharacteristic != null) {
       try {
-        // BT printers have max MTU, chunk data
-        const chunkSize = 512;
-        for (var i = 0; i < data.length; i += chunkSize) {
-          final end = (i + chunkSize) < data.length
-              ? i + chunkSize
-              : data.length;
+        const chunk = 512;
+        for (var i = 0; i < data.length; i += chunk) {
+          final end = (i + chunk) < data.length ? i + chunk : data.length;
           await _printCharacteristic!.write(
             data.sublist(i, end),
             withoutResponse: true,
@@ -181,17 +256,25 @@ class PrinterService {
         return false;
       }
     }
+
+    // WiFi (explicit IP required)
+    if (wifiIp != null) {
+      return printViaWifi(ipAddress: wifiIp, port: wifiPort, data: data);
+    }
+
     return false;
   }
 
-  List<int> _encodeText(String text) {
-    return text.codeUnits;
-  }
+  // ─── Helpers ─────────────────────────────────────────────────────────
 
-  String _padLine(String left, String right, {int width = 32}) {
+  List<int> _encode(String text) => text.codeUnits;
+
+  String _pad(String left, String right, {int width = 32}) {
     final spaces = width - left.length - right.length;
     return '$left${' ' * (spaces > 0 ? spaces : 1)}$right\n';
   }
 }
+
+enum _UsbMode { usb, serial }
 
 final printerService = PrinterService();

@@ -41,8 +41,9 @@ dependencies:
   # Camera barcode/QR scanner
   mobile_scanner: ^5.2.3
 
-  # Bluetooth (receipt printers)
+  # Bluetooth + USB/Serial (receipt printers)
   flutter_blue_plus: ^1.35.5
+  usb_serial: ^0.5.2
 
   # QR Code generation
   qr_flutter: ^4.1.0

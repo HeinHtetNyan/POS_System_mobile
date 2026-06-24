@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../providers/pos_provider.dart';
 import '../widgets/product_grid.dart';
 import '../widgets/cart_panel.dart';
@@ -8,6 +11,7 @@ import '../widgets/payment_dialog.dart';
 import '../../cashier_session/providers/session_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/connectivity_provider.dart';
+import '../../../core/hardware/scanner_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/order_model.dart';
@@ -21,6 +25,64 @@ class PosScreen extends ConsumerStatefulWidget {
 
 class _PosScreenState extends ConsumerState<PosScreen> {
   bool _showCartSheet = false;
+  StreamSubscription<String>? _scannerSub;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleHwKey);
+    _scannerSub = scannerService.barcodeStream.listen(_onBarcode);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleHwKey);
+    _scannerSub?.cancel();
+    super.dispose();
+  }
+
+  bool _handleHwKey(KeyEvent event) {
+    scannerService.handleKeyEvent(event);
+    return false;
+  }
+
+  void _onBarcode(String barcode) {
+    if (!mounted) return;
+    final user = ref.read(authProvider).user;
+    final session = ref.read(sessionProvider).session;
+    if (user == null || session == null) return;
+    final branchId = user.primaryBranchId ?? session.branchId;
+    final products = ref.read(productListProvider(branchId)).products;
+    final matches = products.where(
+      (p) => p.barcode == barcode || p.sku == barcode,
+    );
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Product not found: $barcode'),
+        backgroundColor: AppColors.error,
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+    final product = matches.first;
+    final cartParams = (branchId: branchId, sessionId: session.id);
+    ref.read(posCartProvider(cartParams).notifier).addItem(product);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${product.name} added'),
+      backgroundColor: AppColors.success,
+      duration: const Duration(seconds: 1),
+    ));
+  }
+
+  Future<void> _openCameraScanner(BuildContext ctx) async {
+    final barcode = await showModalBottomSheet<String>(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _PosScannerSheet(),
+    );
+    if (barcode != null) _onBarcode(barcode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,8 +96,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       );
     }
 
-    // Gate: POS checkout requires tablet (≥600dp). Small phones are not supported.
-    if (MediaQuery.of(context).size.width < 600) {
+    // Gate: POS checkout requires tablet (≥700dp). Small phones are not supported.
+    if (MediaQuery.of(context).size.width < 700) {
       return Scaffold(
         appBar: AppBar(title: const Text('Point of Sale')),
         body: Center(
@@ -96,6 +158,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       appBar: AppBar(
         title: const Text('Point of Sale'),
         actions: [
+          // Camera scanner button
+          Builder(builder: (ctx) => IconButton(
+            icon: const Icon(Icons.qr_code_scanner_outlined),
+            tooltip: 'Scan barcode',
+            onPressed: () => _openCameraScanner(ctx),
+          )),
           // Offline indicator
           if (!isOnline)
             Container(
@@ -381,6 +449,78 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PosScannerSheet extends StatefulWidget {
+  const _PosScannerSheet();
+
+  @override
+  State<_PosScannerSheet> createState() => _PosScannerSheetState();
+}
+
+class _PosScannerSheetState extends State<_PosScannerSheet> {
+  final _controller = MobileScannerController();
+  bool _scanned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.55,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_scanner_outlined,
+                    color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                const Text('Scan Product Barcode',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(20)),
+              child: MobileScanner(
+                controller: _controller,
+                onDetect: (capture) {
+                  if (_scanned) return;
+                  final raw = capture.barcodes.isNotEmpty
+                      ? capture.barcodes.first.rawValue
+                      : null;
+                  if (raw != null && raw.isNotEmpty) {
+                    _scanned = true;
+                    Navigator.of(context).pop(raw);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

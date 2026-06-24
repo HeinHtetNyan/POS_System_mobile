@@ -18,7 +18,7 @@ class CashierDashboard extends ConsumerWidget {
     final session = sessionState.session;
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 600;
+    final isTablet = screenWidth >= 700;
 
     return Scaffold(
       appBar: AppBar(

@@ -13,6 +13,24 @@ export interface PrintReceiptOpts {
   logoDataUrl?: string | null
 }
 
+// WebUSB API types (not in standard TS DOM lib)
+interface USBEndpoint { direction: 'in' | 'out'; type: 'bulk' | 'interrupt' | 'isochronous'; endpointNumber: number }
+interface USBAlternateInterface { endpoints: USBEndpoint[] }
+interface USBInterface { interfaceNumber: number; alternates: USBAlternateInterface[] }
+interface USBConfiguration { interfaces: USBInterface[] }
+interface USBDevice {
+  vendorId: number; productId: number
+  manufacturerName?: string; productName?: string
+  opened: boolean; configuration: USBConfiguration | null
+  open(): Promise<void>; close(): Promise<void>
+  selectConfiguration(value: number): Promise<void>
+  claimInterface(n: number): Promise<void>; releaseInterface(n: number): Promise<void>
+  transferOut(endpoint: number, data: BufferSource): Promise<{ status: string }>
+}
+interface USBDeviceRequestOptions { filters: unknown[] }
+interface USB { requestDevice(opts: USBDeviceRequestOptions): Promise<USBDevice>; getDevices(): Promise<USBDevice[]> }
+declare global { interface Navigator { usb: USB } }
+
 // Characters per line for each paper width (standard ESC/POS font)
 const COLS: Record<PaperWidth, number> = { '58mm': 32, '80mm': 42 }
 

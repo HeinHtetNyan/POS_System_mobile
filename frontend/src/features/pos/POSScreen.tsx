@@ -72,10 +72,10 @@ export default function POSScreen() {
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products')
   const [scannerOpen, setScannerOpen] = useState(false)
 
-  // Block POS on mobile-width browsers — tablet (≥768px) and wider only
-  const [isMobileWidth, setIsMobileWidth] = useState(() => window.innerWidth < 768)
+  // Block POS on mobile-width browsers — tablet (≥700px) and wider only
+  const [isMobileWidth, setIsMobileWidth] = useState(() => window.innerWidth < 700)
   useEffect(() => {
-    const fn = () => setIsMobileWidth(window.innerWidth < 768)
+    const fn = () => setIsMobileWidth(window.innerWidth < 700)
     window.addEventListener('resize', fn)
     return () => window.removeEventListener('resize', fn)
   }, [])
@@ -346,15 +346,17 @@ export default function POSScreen() {
                 <Kbd keys="/" />
               </span>
             </div>
-            {/* Camera scanner — hidden on mobile-width browsers */}
-            <button
-              onClick={() => setScannerOpen(true)}
-              className="hidden md:flex w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 items-center justify-center text-zinc-500 hover:text-zinc-200 transition-colors"
-              aria-label="Scan barcode"
-              title="Scan barcode (camera)"
-            >
-              <IconBarcode width="17" height="17" />
-            </button>
+            {/* Camera scanner — hidden on mobile-width browsers (< 700px) */}
+            {!isMobileWidth && (
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="flex w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 items-center justify-center text-zinc-500 hover:text-zinc-200 transition-colors"
+                aria-label="Scan barcode"
+                title="Scan barcode (camera)"
+              >
+                <IconBarcode width="17" height="17" />
+              </button>
+            )}
             <button
               onClick={toggleDesktopFocusMode}
               className="hidden lg:flex w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 items-center justify-center text-zinc-500 hover:text-zinc-200 transition-colors"

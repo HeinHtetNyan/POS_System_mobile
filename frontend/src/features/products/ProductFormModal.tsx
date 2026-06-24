@@ -29,10 +29,10 @@ export function ProductFormModal({ product, initialBarcode, onClose, onSaved }: 
   const isEdit = !!product
   const selectedBranch = useTenantStore(s => s.selectedBranch)
 
-  // Disable camera scanner and USB scanner on mobile-width browsers (< 768px)
-  const [isMobileWidth, setIsMobileWidth] = useState(() => window.innerWidth < 768)
+  // Disable camera scanner and USB scanner on mobile-width browsers (< 700px)
+  const [isMobileWidth, setIsMobileWidth] = useState(() => window.innerWidth < 700)
   useEffect(() => {
-    const fn = () => setIsMobileWidth(window.innerWidth < 768)
+    const fn = () => setIsMobileWidth(window.innerWidth < 700)
     window.addEventListener('resize', fn)
     return () => window.removeEventListener('resize', fn)
   }, [])

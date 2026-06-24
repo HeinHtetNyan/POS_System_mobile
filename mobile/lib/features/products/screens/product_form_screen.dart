@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../data/products_repository.dart';
 import '../providers/products_provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -59,6 +60,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _costPrice.dispose();
     _description.dispose();
     super.dispose();
+  }
+
+  Future<void> _openCameraScanner() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _BarcodeScannerSheet(),
+    );
+    if (result != null && mounted) {
+      setState(() => _barcode.text = result);
+    }
   }
 
   Future<void> _save() async {
@@ -149,14 +162,34 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            // Barcode
-            TextFormField(
-              controller: _barcode,
-              decoration: const InputDecoration(
-                labelText: 'Barcode',
-                prefixIcon: Icon(Icons.qr_code_outlined),
-              ),
-              keyboardType: TextInputType.number,
+            // Barcode — camera scan button available on all screen sizes
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _barcode,
+                    decoration: const InputDecoration(
+                      labelText: 'Barcode',
+                      prefixIcon: Icon(Icons.qr_code_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: IconButton.filled(
+                    onPressed: _openCameraScanner,
+                    icon: const Icon(Icons.qr_code_scanner_outlined),
+                    tooltip: 'Scan barcode',
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             // Prices row
@@ -245,6 +278,78 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           ],
         ),
         ),
+      ),
+    );
+  }
+}
+
+class _BarcodeScannerSheet extends StatefulWidget {
+  const _BarcodeScannerSheet();
+
+  @override
+  State<_BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
+}
+
+class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
+  final _controller = MobileScannerController();
+  bool _scanned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.55,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_scanner_outlined,
+                    color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                const Text('Scan Barcode',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(20)),
+              child: MobileScanner(
+                controller: _controller,
+                onDetect: (capture) {
+                  if (_scanned) return;
+                  final raw = capture.barcodes.isNotEmpty
+                      ? capture.barcodes.first.rawValue
+                      : null;
+                  if (raw != null && raw.isNotEmpty) {
+                    _scanned = true;
+                    Navigator.of(context).pop(raw);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
