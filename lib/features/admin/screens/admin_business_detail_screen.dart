@@ -617,8 +617,9 @@ class _AdminBusinessDetailScreenState
                           final p = plans[i];
                           final pid = p['id']?.toString() ?? '';
                           final pname = p['name']?.toString() ?? pid;
-                          final price =
-                              (p['monthly_price'] as num?)?.toDouble() ?? 0.0;
+                          final price = (p['price'] as num?)?.toDouble() ??
+                              (p['monthly_price'] as num?)?.toDouble() ??
+                              0.0;
                           final isSelected = selectedPlanId == pid;
                           return GestureDetector(
                             onTap: () => setSt(() => selectedPlanId = pid),

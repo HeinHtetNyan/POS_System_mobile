@@ -73,19 +73,45 @@ class SubscriptionPlanModel {
   });
 
   factory SubscriptionPlanModel.fromJson(Map<String, dynamic> json) {
+    // Backend's actual PlanResponse sends `price` (not `monthly_price`) and
+    // per-feature limits inside `entitlements` (not flat max_users/etc
+    // fields) — this used to read the wrong keys and always show $0 / "∞".
+    final entitlements = json['entitlements'] as List<dynamic>? ?? [];
+    int limitFor(String code) {
+      for (final e in entitlements) {
+        if (e is Map && e['feature_code'] == code) {
+          final limit = e['limit_value'];
+          return limit == null ? 0 : (limit as num).toInt();
+        }
+      }
+      return 0;
+    }
+
+    final enabledFeatureLabels = {
+      'analytics': 'Analytics',
+      'procurement': 'Procurement',
+      'advanced_reports': 'Advanced Reports',
+    };
+    final features = <String>[];
+    for (final e in entitlements) {
+      if (e is Map && e['enabled'] == true) {
+        final label = enabledFeatureLabels[e['feature_code']];
+        if (label != null) features.add(label);
+      }
+    }
+
     return SubscriptionPlanModel(
       id: json['id'] as String,
       name: json['name'] as String? ?? '',
       description: json['description'] as String?,
-      monthlyPrice: (json['monthly_price'] as num?)?.toDouble() ?? 0.0,
-      maxUsers: json['max_users'] as int? ?? 0,
-      maxBranches: json['max_branches'] as int? ?? 0,
-      maxProducts: json['max_products'] as int? ?? 0,
+      monthlyPrice: (json['price'] as num?)?.toDouble() ??
+          (json['monthly_price'] as num?)?.toDouble() ??
+          0.0,
+      maxUsers: limitFor('users'),
+      maxBranches: limitFor('branches'),
+      maxProducts: limitFor('products'),
       isActive: json['is_active'] as bool? ?? true,
-      features: (json['features'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
+      features: features,
     );
   }
 }

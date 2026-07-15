@@ -466,7 +466,7 @@ List<_NavItem> _navItems(String role, Translate t) {
         _NavItem(label: 'Audit Logs',      icon: Icons.history_outlined,           selectedIcon: Icons.history,           path: '/admin/audit'),
         _NavItem(label: 'Notifs',          icon: Icons.campaign_outlined,          selectedIcon: Icons.campaign,          path: '/admin/notifications'),
         _NavItem(label: 'Payment Methods', icon: Icons.payment_outlined,           selectedIcon: Icons.payment,           path: '/admin/payment-methods'),
-        _NavItem(label: 'App Downloads',   icon: Icons.download_outlined,          selectedIcon: Icons.download,          path: '/admin/app-download-links'),
+        _NavItem(label: 'All Links',   icon: Icons.download_outlined,          selectedIcon: Icons.download,          path: '/admin/app-download-links'),
         _NavItem(label: t('nav.notifications'),   icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,     path: '/notifications'),
         _NavItem(label: t('nav.settings'),        icon: Icons.settings_outlined,          selectedIcon: Icons.settings,          path: '/settings'),
       ];

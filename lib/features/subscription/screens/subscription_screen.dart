@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/api/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../providers/subscription_provider.dart';
 import '../data/subscription_repository.dart';
+import '../widgets/contact_links_row.dart';
 
 class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
@@ -634,6 +637,27 @@ class _CurrentPlanTab extends ConsumerStatefulWidget {
 }
 
 class _CurrentPlanTabState extends ConsumerState<_CurrentPlanTab> {
+  // Global Channel Links (Super Admin > All Links) shown on custom/Enterprise
+  // plan cards instead of a per-plan value — best-effort, defaults to empty.
+  Map<String, dynamic>? _channelLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChannelLinks();
+  }
+
+  Future<void> _loadChannelLinks() async {
+    try {
+      final res = await apiClient.dio.get(ApiEndpoints.publicAppDownloadLinks);
+      if (mounted) {
+        setState(() => _channelLinks = res.data as Map<String, dynamic>? ?? {});
+      }
+    } catch (_) {
+      // Best-effort — plan cards fall back to the "Contact us" message.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // H-39: wrap in ContentWrapper
@@ -694,6 +718,7 @@ class _CurrentPlanTabState extends ConsumerState<_CurrentPlanTab> {
               ...widget.plans.map((plan) => _PlanCard(
                     plan: plan,
                     statusData: widget.statusData,
+                    channelLinks: _channelLinks,
                     // H-35: navigate to pricing screen for upgrade
                     onNavigateToPricing: widget.onNavigateToPricing,
                     // H-38: downgrade callback
@@ -956,12 +981,14 @@ class _VerticalDivider extends StatelessWidget {
 class _PlanCard extends StatelessWidget {
   final Map<String, dynamic> plan;
   final Map<String, dynamic> statusData;
+  final Map<String, dynamic>? channelLinks;
   final VoidCallback onNavigateToPricing;
   final void Function(String planId) onDowngrade;
 
   const _PlanCard({
     required this.plan,
     required this.statusData,
+    required this.channelLinks,
     required this.onNavigateToPricing,
     required this.onDowngrade,
   });
@@ -972,6 +999,7 @@ class _PlanCard extends StatelessWidget {
     final name = plan['name']?.toString() ?? '—';
     final price = plan['price']?.toString() ?? plan['monthly_price']?.toString();
     final currency = plan['currency']?.toString() ?? 'MMK';
+    final isCustom = plan['is_custom'] == true;
     final currentPlanId =
         statusData['plan_id']?.toString() ?? '';
     final isCurrent = planId == currentPlanId;
@@ -1028,7 +1056,17 @@ class _PlanCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (price != null) ...[
+                    if (isCustom) ...[
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Contact Us',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ] else if (price != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         '$price $currency / mo',
@@ -1091,9 +1129,19 @@ class _PlanCard extends StatelessWidget {
             ),
           ],
 
+          // Contact-us plans (e.g. Enterprise) show contact links directly
+          // instead of an Upgrade button — matches web's PlansPage.tsx.
+          if (!isCurrent && isCustom) ...[
+            const SizedBox(height: 14),
+            ContactLinksRow(
+              channelLinks: channelLinks,
+              emptyMessage: 'Contact your administrator for details.',
+            ),
+          ],
+
           // H-35: Upgrade navigates to pricing screen
           // H-38: Downgrade button shown for cheaper plans
-          if (!isCurrent) ...[
+          if (!isCurrent && !isCustom) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,

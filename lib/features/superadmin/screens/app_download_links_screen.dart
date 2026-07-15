@@ -15,26 +15,52 @@ class AppDownloadLinksScreen extends StatefulWidget {
   State<AppDownloadLinksScreen> createState() => _AppDownloadLinksScreenState();
 }
 
+enum _Group { download, channel }
+
+enum _Kind { url, phone, email }
+
 class _Field {
   final String key;
   final IconData icon;
   final String label;
   final String placeholder;
   final String? hint;
-  const _Field(this.key, this.icon, this.label, this.placeholder, [this.hint]);
+  final _Kind kind;
+  final _Group group;
+  const _Field(this.key, this.icon, this.label, this.placeholder, this.group,
+      [this.hint, this.kind = _Kind.url]);
 }
 
 class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
   static const _fields = [
     _Field('android', Icons.android, 'Android (Google Play)',
-        'https://play.google.com/store/apps/details?id=...',
+        'https://play.google.com/store/apps/details?id=...', _Group.download,
         'If this isn\'t a Play Store link (e.g. a direct .apk), users see an "Install unknown apps" warning they must approve manually.'),
     _Field('ios', Icons.phone_iphone, 'iOS (App Store)',
-        'https://apps.apple.com/app/id...',
+        'https://apps.apple.com/app/id...', _Group.download,
         'iOS only allows installs via the App Store or TestFlight — use a TestFlight link if the app isn\'t published yet.'),
     _Field('windows', Icons.desktop_windows_outlined, 'Windows',
-        'https://.../SawYunPos-Setup.exe'),
+        'https://.../SawYunPos-Setup.exe', _Group.download),
+    _Field('youtube', Icons.smart_display_outlined, 'YouTube Channel',
+        'https://youtube.com/@yourchannel', _Group.channel),
+    _Field('telegram', Icons.send_outlined, 'Telegram',
+        'https://t.me/yourhandle', _Group.channel),
+    _Field('viber', Icons.chat_bubble_outline, 'Viber',
+        'https://invite.viber.com/?g=...', _Group.channel),
+    _Field('phone', Icons.call_outlined, 'Phone', '+959xxxxxxxxx',
+        _Group.channel, null, _Kind.phone),
+    _Field('email', Icons.email_outlined, 'Email', 'sales@yourcompany.com',
+        _Group.channel, null, _Kind.email),
+    _Field('facebook', Icons.facebook_outlined, 'Facebook',
+        'https://facebook.com/yourpage', _Group.channel),
+    _Field('tiktok', Icons.music_note_outlined, 'TikTok',
+        'https://tiktok.com/@youraccount', _Group.channel),
   ];
+
+  static final _downloadFields =
+      _fields.where((f) => f.group == _Group.download).toList();
+  static final _channelFields =
+      _fields.where((f) => f.group == _Group.channel).toList();
 
   bool _loading = true;
   bool _saving = false;
@@ -66,8 +92,30 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
     return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
   }
 
-  bool get _allValid =>
-      _fields.every((f) => _isValidUrl(_controllers[f.key]!.text.trim()));
+  // Phone is a tel number, not a URL — just require it look like one.
+  bool _isValidPhone(String value) {
+    if (value.isEmpty) return true;
+    return RegExp(r'^[+()\d\s-]{5,20}$').hasMatch(value);
+  }
+
+  bool _isValidEmail(String value) {
+    if (value.isEmpty) return true;
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
+  }
+
+  bool _isValidField(_Field f) {
+    final value = _controllers[f.key]!.text.trim();
+    switch (f.kind) {
+      case _Kind.phone:
+        return _isValidPhone(value);
+      case _Kind.email:
+        return _isValidEmail(value);
+      case _Kind.url:
+        return _isValidUrl(value);
+    }
+  }
+
+  bool get _allValid => _fields.every(_isValidField);
 
   Future<void> _load() async {
     try {
@@ -116,7 +164,7 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
-        title: const Text('App Download Links',
+        title: const Text('All Links',
             style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
@@ -144,10 +192,17 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   const Text(
-                    'Shown as download buttons on the web app\'s public login screen. Leave a field empty to show "Coming Soon" for that platform.',
+                    'Download and channel links shown on the web app\'s public login screen. Leave a field empty to show "Coming Soon" for that platform.',
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
+                  const Text('DOWNLOAD LINKS',
+                      style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2)),
+                  const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.surface,
@@ -157,9 +212,38 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
                     clipBehavior: Clip.hardEdge,
                     child: Column(
                       children: [
-                        for (var i = 0; i < _fields.length; i++) ...[
+                        for (var i = 0; i < _downloadFields.length; i++) ...[
                           if (i > 0) Divider(height: 1, color: AppColors.divider),
-                          _fieldTile(_fields[i]),
+                          _fieldTile(_downloadFields[i]),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('CHANNEL LINKS',
+                      style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2)),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Social / messaging links shown next to the download buttons.',
+                    style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _channelFields.length; i++) ...[
+                          if (i > 0) Divider(height: 1, color: AppColors.divider),
+                          _fieldTile(_channelFields[i]),
                         ],
                       ],
                     ),
@@ -215,7 +299,7 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
 
   Widget _fieldTile(_Field f) {
     final ctrl = _controllers[f.key]!;
-    final valid = _isValidUrl(ctrl.text.trim());
+    final valid = _isValidField(f);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -262,6 +346,11 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
                 const SizedBox(height: 4),
                 TextField(
                   controller: ctrl,
+                  keyboardType: switch (f.kind) {
+                    _Kind.phone => TextInputType.phone,
+                    _Kind.email => TextInputType.emailAddress,
+                    _Kind.url => TextInputType.url,
+                  },
                   style: const TextStyle(
                       color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
                   decoration: InputDecoration(
@@ -280,10 +369,15 @@ class _AppDownloadLinksScreenState extends State<AppDownloadLinksScreen> {
                   ),
                 ),
                 if (!valid)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('Enter a valid http(s) URL, or leave empty.',
-                        style: TextStyle(color: AppColors.error, fontSize: 11)),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                        switch (f.kind) {
+                          _Kind.phone => 'Enter a valid phone number, or leave empty.',
+                          _Kind.email => 'Enter a valid email address, or leave empty.',
+                          _Kind.url => 'Enter a valid http(s) URL, or leave empty.',
+                        },
+                        style: const TextStyle(color: AppColors.error, fontSize: 11)),
                   )
                 else if (f.hint != null)
                   Padding(

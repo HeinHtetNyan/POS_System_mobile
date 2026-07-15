@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_endpoints.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/channel_links.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_logo.dart';
@@ -25,6 +28,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _staffIdentifierController = TextEditingController();
   bool _obscurePassword = true;
   _LoginMode _mode = _LoginMode.owner;
+
+  // Public, unauthenticated — safe to fetch before sign-in. Super Admin edits
+  // these under App Download Links; empty fields are simply omitted here.
+  Map<String, dynamic>? _downloadLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDownloadLinks();
+  }
+
+  Future<void> _loadDownloadLinks() async {
+    try {
+      final res = await apiClient.dio.get(ApiEndpoints.publicAppDownloadLinks);
+      if (mounted) {
+        setState(() =>
+            _downloadLinks = res.data as Map<String, dynamic>? ?? {});
+      }
+    } catch (_) {
+      // Best-effort — links row just stays hidden if this fails.
+    }
+  }
 
   @override
   void dispose() {
@@ -483,11 +508,82 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
 
+                  if (_downloadLinks != null) ...[
+                    const SizedBox(height: 20),
+                    _DownloadAndContactLinks(links: _downloadLinks!),
+                  ],
+
                   const SizedBox(height: 40),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// Windows download + contact/social links — same Super Admin > App Download
+// Links resource web's login page reads. The Android/iOS "Mobile App" chip
+// is skipped here since it doesn't make sense inside the mobile app itself.
+class _DownloadAndContactLinks extends StatelessWidget {
+  final Map<String, dynamic> links;
+  const _DownloadAndContactLinks({required this.links});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <ChannelLinkChipData>[
+      if ((links['windows'] as String?)?.isNotEmpty == true)
+        ChannelLinkChipData(Icons.desktop_windows_outlined, 'Windows App',
+            links['windows'] as String),
+      ...buildChannelLinkChips(links),
+    ];
+    if (chips.isEmpty) return const SizedBox();
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: chips.map((c) => _LinkChip(data: c)).toList(),
+    );
+  }
+}
+
+class _LinkChip extends StatelessWidget {
+  final ChannelLinkChipData data;
+  const _LinkChip({required this.data});
+
+  Future<void> _open() async {
+    final uri = Uri.tryParse(data.href);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _open,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(data.icon, size: 15, color: AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(data.label,
+                style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ],
         ),
       ),
     );

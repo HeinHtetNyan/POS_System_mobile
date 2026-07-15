@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
@@ -19,11 +20,17 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _trialDaysCtrl = TextEditingController();
+  final _sortOrderCtrl = TextEditingController(text: '0');
 
   String _billingCycle = 'MONTHLY';
+  String _currency = 'MMK';
+  bool _isActive = true;
+  bool _isReferralPlan = false;
+  bool _isCustom = false;
 
   final Map<String, bool> _toggleFeatures = {
     'pos': true,
@@ -79,9 +86,11 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _codeCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
     _trialDaysCtrl.dispose();
+    _sortOrderCtrl.dispose();
     super.dispose();
   }
 
@@ -99,10 +108,16 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
       final data = res.data as Map<String, dynamic>;
 
       _nameCtrl.text = (data['name'] as String?) ?? '';
+      _codeCtrl.text = (data['code'] as String?) ?? '';
       _descCtrl.text = (data['description'] as String?) ?? '';
-      _priceCtrl.text = (data['monthly_price'] ?? data['price'] ?? '').toString();
+      _priceCtrl.text = (data['price'] ?? '').toString();
+      _currency = (data['currency'] as String?) ?? 'MMK';
       _trialDaysCtrl.text = (data['trial_days'] ?? 0).toString();
+      _sortOrderCtrl.text = (data['sort_order'] ?? 0).toString();
       _billingCycle = (data['billing_cycle'] as String?) ?? 'MONTHLY';
+      _isActive = data['is_active'] as bool? ?? true;
+      _isReferralPlan = data['is_referral_plan'] as bool? ?? false;
+      _isCustom = data['is_custom'] as bool? ?? false;
 
       final entitlements = data['entitlements'] as List<dynamic>? ?? [];
       for (final e in entitlements) {
@@ -150,12 +165,18 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
 
     final payload = {
       'name': _nameCtrl.text.trim(),
+      'code': _codeCtrl.text.trim(),
       'description': _descCtrl.text.trim().isEmpty
           ? null
           : _descCtrl.text.trim(),
-      'monthly_price': double.parse(_priceCtrl.text.trim()),
       'billing_cycle': _billingCycle,
+      'price': double.parse(_priceCtrl.text.trim()),
+      'currency': _currency,
       'trial_days': int.tryParse(_trialDaysCtrl.text.trim()) ?? 0,
+      'sort_order': int.tryParse(_sortOrderCtrl.text.trim()) ?? 0,
+      'is_active': _isActive,
+      'is_referral_plan': _isReferralPlan,
+      'is_custom': _isCustom,
       'entitlements': entitlements,
     };
 
@@ -281,20 +302,15 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
           ),
           _Divider(),
           _FormField(
-            controller: _priceCtrl,
-            label: 'Price',
-            hint: '0',
-            prefix: 'MMK ',
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Price is required';
-              if (double.tryParse(v.trim()) == null) {
-                return 'Enter a valid number';
-              }
-              return null;
-            },
+            controller: _codeCtrl,
+            label: isEditing ? 'Code (read-only)' : 'Code',
+            hint: 'starter',
+            enabled: !isEditing,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Code is required' : null,
           ),
+          _Divider(),
+          _buildPriceAndCurrencyField(),
           _Divider(),
           _buildBillingCycleField(),
           _Divider(),
@@ -310,7 +326,202 @@ class _AdminPlanFormScreenState extends ConsumerState<AdminPlanFormScreen> {
             label: 'Trial Days',
             hint: '0 = no trial',
             keyboardType: TextInputType.number,
-            isLast: true,
+          ),
+          _Divider(),
+          _FormField(
+            controller: _sortOrderCtrl,
+            label: 'Sort Order',
+            hint: 'Lower = first',
+            keyboardType: TextInputType.number,
+          ),
+          _Divider(),
+          SwitchListTile(
+            value: _isActive,
+            onChanged: (v) => setState(() => _isActive = v),
+            activeThumbColor: AppColors.primaryFg,
+            activeTrackColor: AppColors.primary,
+            inactiveThumbColor: AppColors.textDisabled,
+            inactiveTrackColor: AppColors.surfaceVariant,
+            title: const Text('Active',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14)),
+            subtitle: const Text('Visible to subscribers',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          ),
+          _Divider(),
+          SwitchListTile(
+            value: _isReferralPlan,
+            onChanged: (v) => setState(() => _isReferralPlan = v),
+            activeThumbColor: AppColors.primaryFg,
+            activeTrackColor: AppColors.primary,
+            inactiveThumbColor: AppColors.textDisabled,
+            inactiveTrackColor: AppColors.surfaceVariant,
+            title: const Text('Referral Plan',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14)),
+            subtitle: const Text(
+                'Users who register with a reseller promo code are placed on this plan. Only one plan should have this flag.',
+                style: TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          ),
+          _Divider(),
+          SwitchListTile(
+            value: _isCustom,
+            onChanged: (v) => setState(() => _isCustom = v),
+            activeThumbColor: AppColors.primaryFg,
+            activeTrackColor: AppColors.primary,
+            inactiveThumbColor: AppColors.textDisabled,
+            inactiveTrackColor: AppColors.surfaceVariant,
+            title: const Text('Custom Plan',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14)),
+            subtitle: RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                children: [
+                  const TextSpan(
+                      text: 'Shows a "Contact Us" card instead of a subscribe '
+                          'button, with the Channel Links configured under '),
+                  TextSpan(
+                    text: 'Settings → All Links',
+                    style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.push('/admin/app-download-links'),
+                  ),
+                  const TextSpan(text: '.'),
+                ],
+              ),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceAndCurrencyField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Price',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _priceCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Price is required';
+                    }
+                    if (double.tryParse(v.trim()) == null) {
+                      return 'Enter a valid number';
+                    }
+                    return null;
+                  },
+                  style: const TextStyle(
+                      color: AppColors.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: const TextStyle(
+                        color: AppColors.textDisabled, fontSize: 14),
+                    filled: true,
+                    fillColor: AppColors.surfaceVariant,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.error),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Currency',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _currency,
+                  onChanged: (v) {
+                    if (v != null) setState(() => _currency = v);
+                  },
+                  dropdownColor: AppColors.surfaceVariant,
+                  iconEnabledColor: AppColors.textSecondary,
+                  style: const TextStyle(
+                      color: AppColors.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: AppColors.surfaceVariant,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'MMK', child: Text('Kyats')),
+                    DropdownMenuItem(value: 'USD', child: Text('USD')),
+                    DropdownMenuItem(value: 'THB', child: Text('THB')),
+                    DropdownMenuItem(value: 'SGD', child: Text('SGD')),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -523,6 +734,7 @@ class _FormField extends StatelessWidget {
   final int maxLines;
   final bool isFirst;
   final bool isLast;
+  final bool enabled;
   final String? Function(String?)? validator;
 
   const _FormField({
@@ -534,6 +746,7 @@ class _FormField extends StatelessWidget {
     this.maxLines = 1,
     this.isFirst = false,
     this.isLast = false,
+    this.enabled = true,
     this.validator,
   });
 
@@ -557,6 +770,7 @@ class _FormField extends StatelessWidget {
             controller: controller,
             keyboardType: keyboardType,
             maxLines: maxLines,
+            enabled: enabled,
             validator: validator,
             style: const TextStyle(
               color: AppColors.textPrimary,
@@ -778,3 +992,4 @@ class _ErrorRetry extends StatelessWidget {
     );
   }
 }
+

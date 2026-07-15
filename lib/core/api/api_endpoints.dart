@@ -191,6 +191,8 @@ class ApiEndpoints {
   static const String adminOverview = '/subscriptions/admin/overview';
   static const String adminAppDownloadLinks =
       '/subscriptions/admin/platform/app-download-links';
+  // Public — safe to fetch before sign-in (same resource as adminAppDownloadLinks).
+  static const String publicAppDownloadLinks = '/public/app-download-links';
   static const String adminCreateTenant = '/admin/tenants';
   static String adminResellerWallet(String id) => '/admin/reseller-finance/wallets/$id';
   static String adminResellerReferrals(String id) => '/admin/reseller-finance/referrals?reseller_id=$id';

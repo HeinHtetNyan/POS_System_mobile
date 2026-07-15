@@ -32,15 +32,33 @@ class _PlanModel {
     required this.entitlements,
   });
 
+  // Limit-style features report their numeric cap (0 = unlimited); toggle
+  // features report enabled/disabled. Same classification as web/mobile's
+  // admin plan form.
+  static const _limitStyleFeatures = {
+    'users', 'branches', 'products', 'customers', 'devices',
+  };
+
   factory _PlanModel.fromJson(Map<String, dynamic> json) {
     final raw = json['entitlements'];
     Map<String, dynamic> ents = {};
     if (raw is Map) {
       ents = Map<String, dynamic>.from(raw);
     } else if (raw is List) {
+      // Real backend shape: [{feature_code, enabled, limit_value}, ...]
       for (final e in raw) {
-        if (e is Map && e['feature'] != null) {
-          ents[e['feature'] as String] = e['value'] ?? e['limit'] ?? true;
+        if (e is Map && e['feature_code'] != null) {
+          final code = e['feature_code'] as String;
+          final enabled = e['enabled'] == true;
+          final limitValue = e['limit_value'];
+          if (_limitStyleFeatures.contains(code)) {
+            // null limit_value with enabled=true means unlimited (0, matching
+            // the "0 = ∞" convention _FeatureRow already understands).
+            ents[code] =
+                limitValue != null ? (limitValue as num).toInt() : 0;
+          } else {
+            ents[code] = enabled;
+          }
         }
       }
     }

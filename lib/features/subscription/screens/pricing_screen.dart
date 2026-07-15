@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
+import '../widgets/contact_links_row.dart';
 
 class PricingScreen extends StatefulWidget {
   const PricingScreen({super.key});
@@ -16,11 +18,26 @@ class _PricingScreenState extends State<PricingScreen> {
   Dio get _dio => apiClient.dio;
 
   late Future<List<Map<String, dynamic>>> _plansFuture;
+  // Global Channel Links (Super Admin > All Links) shown on custom/Enterprise
+  // plan cards instead of a per-plan value — best-effort, defaults to empty.
+  Map<String, dynamic>? _channelLinks;
 
   @override
   void initState() {
     super.initState();
     _plansFuture = _fetchPlans();
+    _loadChannelLinks();
+  }
+
+  Future<void> _loadChannelLinks() async {
+    try {
+      final res = await _dio.get(ApiEndpoints.publicAppDownloadLinks);
+      if (mounted) {
+        setState(() => _channelLinks = res.data as Map<String, dynamic>? ?? {});
+      }
+    } catch (_) {
+      // Best-effort — plan cards fall back to the "Contact us" message.
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchPlans() async {
@@ -160,6 +177,7 @@ class _PricingScreenState extends State<PricingScreen> {
                     return _PlanCard(
                       plan: plan,
                       isHighlighted: isHighlighted,
+                      channelLinks: _channelLinks,
                       onGetStarted: (planId) {
                         context.push('/subscribe?plan_id=$planId');
                       },
@@ -214,11 +232,13 @@ class _PricingScreenState extends State<PricingScreen> {
 class _PlanCard extends StatelessWidget {
   final Map<String, dynamic> plan;
   final bool isHighlighted;
+  final Map<String, dynamic>? channelLinks;
   final void Function(String planId) onGetStarted;
 
   const _PlanCard({
     required this.plan,
     required this.isHighlighted,
+    required this.channelLinks,
     required this.onGetStarted,
   });
 
@@ -232,6 +252,9 @@ class _PlanCard extends StatelessWidget {
     final cycle = (plan['billing_cycle']?.toString() ?? 'MONTHLY').toUpperCase();
     final cycleLabel = cycle == 'YEARLY' ? 'year' : 'month';
     final description = plan['description']?.toString();
+    // "Contact Us" plans (e.g. Enterprise) show contact links instead of a
+    // price/Get Started button — matches web's PricingPage.tsx.
+    final isCustom = plan['is_custom'] == true;
 
     // Parse entitlements
     final rawEntitlements = plan['entitlements'];
@@ -315,34 +338,46 @@ class _PlanCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // Price
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'MMK ${_formatPrice(price)}',
-                      style: TextStyle(
-                        color: isHighlighted
-                            ? AppColors.primary
-                            : AppColors.textPrimary,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                      ),
+                // Price (or "Contact Us" for custom/Enterprise-style plans)
+                if (isCustom)
+                  Text(
+                    'Contact Us',
+                    style: TextStyle(
+                      color: isHighlighted
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(width: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        '/ $cycleLabel',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'MMK ${_formatPrice(price)}',
+                        style: TextStyle(
+                          color: isHighlighted
+                              ? AppColors.primary
+                              : AppColors.textPrimary,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '/ $cycleLabel',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
 
                 // Description
                 if (description != null && description.isNotEmpty) ...[
@@ -374,36 +409,39 @@ class _PlanCard extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // Get Started button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: planId.isNotEmpty
-                        ? () => onGetStarted(planId)
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isHighlighted
-                          ? AppColors.primary
-                          : AppColors.surfaceVariant,
-                      foregroundColor: isHighlighted
-                          ? AppColors.primaryFg
-                          : AppColors.textPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: isHighlighted
-                            ? BorderSide.none
-                            : const BorderSide(color: AppColors.divider),
+                // Contact links (custom/Enterprise plans) or Get Started button
+                if (isCustom)
+                  ContactLinksRow(channelLinks: channelLinks)
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: planId.isNotEmpty
+                          ? () => onGetStarted(planId)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isHighlighted
+                            ? AppColors.primary
+                            : AppColors.surfaceVariant,
+                        foregroundColor: isHighlighted
+                            ? AppColors.primaryFg
+                            : AppColors.textPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: isHighlighted
+                              ? BorderSide.none
+                              : const BorderSide(color: AppColors.divider),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: isHighlighted ? 2 : 0,
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      elevation: isHighlighted ? 2 : 0,
-                      textStyle: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      child: const Text('Get Started'),
                     ),
-                    child: const Text('Get Started'),
                   ),
-                ),
               ],
             ),
           ),
