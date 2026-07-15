@@ -84,7 +84,13 @@ class OrderItemModel {
   final int quantityOrdered;
   final double unitPrice;
   final double discountAmount;
+  // Fraction (0-1), matching the backend's `CartItemRequest`/`OrderItemResponse`
+  // contract — NOT a 0-100 percentage.
   final double taxRate;
+  // Per-unit cost at time of sale (backend's `unit_cost_snapshot`), used for
+  // the Receipt Settings "Show Cost Price"/"Show Margin" print options.
+  final double? unitCostSnapshot;
+  final double? _serverTotal;
 
   const OrderItemModel({
     required this.id,
@@ -96,11 +102,17 @@ class OrderItemModel {
     required this.unitPrice,
     required this.discountAmount,
     required this.taxRate,
-  });
+    this.unitCostSnapshot,
+    double? serverTotal,
+  }) : _serverTotal = serverTotal;
 
+  // Prefer the backend's own computed total (authoritative, matches the
+  // order/receipt totals exactly); only recompute as a fallback for rows
+  // that somehow omit it.
   double get lineTotal =>
-      (unitPrice * quantityOrdered) * (1 + taxRate / 100) -
-      (discountAmount * quantityOrdered);
+      _serverTotal ??
+      ((unitPrice * quantityOrdered) * (1 + taxRate) -
+          (discountAmount * quantityOrdered));
 
   String get displayName =>
       variantName != null ? '$productName - $variantName' : productName;
@@ -117,6 +129,8 @@ class OrderItemModel {
       discountAmount:
           (json['discount_amount'] as num?)?.toDouble() ?? 0.0,
       taxRate: (json['tax_rate'] as num?)?.toDouble() ?? 0.0,
+      unitCostSnapshot: (json['unit_cost_snapshot'] as num?)?.toDouble(),
+      serverTotal: (json['total'] as num?)?.toDouble(),
     );
   }
 }

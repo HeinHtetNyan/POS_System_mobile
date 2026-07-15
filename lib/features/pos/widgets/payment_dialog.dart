@@ -11,12 +11,17 @@ class PaymentDialog extends StatefulWidget {
   /// credit payments — if false and store credit is selected the dialog will
   /// show an inline error instead of confirming.
   final bool hasCustomer;
+  /// Tenant's "Default Payment Method" preference (Settings → Preferences) —
+  /// pre-selects this method instead of always defaulting to Cash, matching
+  /// the web app's PaymentOverlay behavior.
+  final String defaultMethod;
 
   const PaymentDialog({
     super.key,
     required this.totalAmount,
     required this.onConfirm,
     this.hasCustomer = false,
+    this.defaultMethod = PaymentMethod.cash,
   });
 
   @override
@@ -24,7 +29,7 @@ class PaymentDialog extends StatefulWidget {
 }
 
 class _PaymentDialogState extends State<PaymentDialog> {
-  String _selectedMethod = PaymentMethod.cash;
+  late String _selectedMethod = widget.defaultMethod;
   final _amountController = TextEditingController();
   final _refController = TextEditingController();
   final List<_SplitPaymentEntry> _splits = [];

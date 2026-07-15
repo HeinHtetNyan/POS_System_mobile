@@ -118,6 +118,7 @@ class ApiEndpoints {
   static const String tenants = '/tenants';
   static String tenant(String id) => '/tenants/$id';
   static String tenantSettings(String id) => '/tenants/$id/settings';
+  static String tenantLogo(String id) => '/tenants/$id/logo';
   static String tenantSubscriptionToggleRenewal(String id) => '/tenants/$id/subscription/toggle-renewal';
 
   // Procurement
@@ -188,6 +189,8 @@ class ApiEndpoints {
 
   // Admin overview
   static const String adminOverview = '/subscriptions/admin/overview';
+  static const String adminAppDownloadLinks =
+      '/subscriptions/admin/platform/app-download-links';
   static const String adminCreateTenant = '/admin/tenants';
   static String adminResellerWallet(String id) => '/admin/reseller-finance/wallets/$id';
   static String adminResellerReferrals(String id) => '/admin/reseller-finance/referrals?reseller_id=$id';

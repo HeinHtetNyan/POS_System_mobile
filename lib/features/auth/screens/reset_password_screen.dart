@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_logo.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String token;
@@ -139,25 +140,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'S',
-                            style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primaryFg,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ),
-                      ),
+                      const AppLogo(size: 60, radius: 14),
                       const SizedBox(height: 16),
                       const Text(
                         'Set New Password',

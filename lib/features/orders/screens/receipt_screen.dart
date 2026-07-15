@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/orders_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/datetime_formatter.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/info_row.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../core/hardware/printer_service.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
+import '../../../core/providers/receipt_options_provider.dart';
 import '../../../models/order_model.dart';
 
 final _orderDetailProvider =
@@ -29,20 +33,24 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(_orderDetailProvider(widget.orderId));
+    // Tenant settings may still be loading the first time this screen opens
+    // right after login — that's fine, auto-print just waits for it.
+    final tenantSettings = ref.watch(tenantSettingsProvider).valueOrNull;
 
-    // Auto-print once when order loads and any printer transport is connected
+    // Auto-print once when order loads, a printer is connected, AND the
+    // tenant's "Auto-Print Receipt" preference (Settings → Preferences) is
+    // on — previously this fired unconditionally, ignoring that toggle.
     ref.listen<AsyncValue<OrderModel>>(
         _orderDetailProvider(widget.orderId), (prev, next) {
       if (_autoPrintResult != null) return; // already attempted
       if (next is AsyncData<OrderModel>) {
-        if (printerService.isAnyConnected) {
-          printerService
-              .printReceipt(next.value, openDrawer: false)
-              .then((ok) {
-            if (mounted) setState(() => _autoPrintResult = ok);
-          });
+        final settings = ref.read(tenantSettingsProvider).valueOrNull;
+        if (printerService.isAnyConnected &&
+            (settings?.autoPrintReceipt ?? false)) {
+          _printReceipt(context, next.value, silent: true);
         } else {
-          // No printer — mark as skipped (false) so banner shows correct state
+          // No printer, or auto-print disabled — mark as skipped (false) so
+          // the banner/button reflect that nothing was sent automatically.
           setState(() => _autoPrintResult = false);
         }
       }
@@ -102,7 +110,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               const SizedBox(height: 12),
               _ItemsCard(order: order),
               const SizedBox(height: 8),
-              _TotalsCard(order: order),
+              _TotalsCard(
+                order: order,
+                showTax: tenantSettings?.showTaxOnReceipt ?? true,
+              ),
               const SizedBox(height: 8),
               _PaymentsCard(order: order),
               const SizedBox(height: 24),
@@ -122,11 +133,25 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   }
 
   Future<void> _printReceipt(
-      BuildContext context, OrderModel order) async {
-    final ok =
-        await printerService.printReceipt(order, openDrawer: false);
-    if (!context.mounted) return;
+    BuildContext context,
+    OrderModel order, {
+    bool silent = false,
+  }) async {
+    final settings = ref.read(tenantSettingsProvider).valueOrNull;
+    final options = ref.read(receiptOptionsProvider);
+    final cashierName = ref.read(currentUserProvider)?.fullName;
+    final ok = await printerService.printReceipt(
+      order,
+      businessName: settings?.businessName,
+      header: settings?.receiptHeader,
+      footer: settings?.receiptFooter,
+      cashierName: cashierName,
+      showTaxOnReceipt: settings?.showTaxOnReceipt ?? true,
+      options: options,
+      openDrawer: false,
+    );
     if (mounted) setState(() => _autoPrintResult = ok);
+    if (silent || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
@@ -238,8 +263,7 @@ class _ReceiptHeader extends StatelessWidget {
     );
   }
 
-  String _fmt(DateTime dt) =>
-      '${dt.day}/${dt.month}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  String _fmt(DateTime dt) => DateTimeFormatter.formatDateTime(dt.toLocal());
 }
 
 class _ItemsCard extends StatelessWidget {
@@ -312,7 +336,8 @@ class _ItemsCard extends StatelessWidget {
 
 class _TotalsCard extends StatelessWidget {
   final OrderModel order;
-  const _TotalsCard({required this.order});
+  final bool showTax;
+  const _TotalsCard({required this.order, this.showTax = true});
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +355,7 @@ class _TotalsCard extends StatelessWidget {
               label: 'Subtotal',
               value: CurrencyFormatter.format(order.grossTotal),
             ),
-            if (order.taxTotal > 0)
+            if (showTax && order.taxTotal > 0)
               InfoRow(
                 label: 'Tax',
                 value: CurrencyFormatter.format(order.taxTotal),

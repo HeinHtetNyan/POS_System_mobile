@@ -4,6 +4,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
 import '../../../core/utils/responsive.dart';
 
 class BusinessSettingsScreen extends ConsumerStatefulWidget {
@@ -46,6 +47,18 @@ class _BusinessSettingsScreenState
     'Pacific/Auckland',
   ];
   String _timezone = 'Asia/Yangon';
+
+  // Currency + language — same fields/values as web's BusinessSettingsPage,
+  // tenant-wide (drives CurrencyFormatter and, once set, the app's language).
+  static const List<String> _currencies = [
+    'MMK', 'USD', 'EUR', 'GBP', 'JPY', 'CNY', 'SGD', 'INR', 'THB', 'AUD', 'CAD',
+  ];
+  String _currency = 'MMK';
+  static const Map<String, String> _locales = {
+    'en-US': 'English',
+    'my-MM': 'မြန်မာ (Burmese)',
+  };
+  String _locale = 'en-US';
 
   // Business hours: Mon=0 .. Sun=6
   static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -90,6 +103,11 @@ class _BusinessSettingsScreenState
       // Timezone
       final tz = data['timezone'] as String? ?? 'Asia/Yangon';
       _timezone = _timezones.contains(tz) ? tz : 'Asia/Yangon';
+
+      final cur = data['currency'] as String? ?? 'MMK';
+      _currency = _currencies.contains(cur) ? cur : 'MMK';
+      final loc = data['locale'] as String? ?? 'en-US';
+      _locale = _locales.containsKey(loc) ? loc : 'en-US';
 
       // Parse business hours if present
       final hours =
@@ -153,9 +171,14 @@ class _BusinessSettingsScreenState
           'email': _emailCtrl.text.trim(),
           'address': _addressCtrl.text.trim(),
           'timezone': _timezone,
+          'currency': _currency,
+          'locale': _locale,
           'business_hours': hours,
         },
       );
+      // Refresh the shared tenant settings so currency/locale-dependent UI
+      // (CurrencyFormatter, receipts, POS) picks up the change immediately.
+      await ref.read(tenantSettingsProvider.notifier).refresh();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -293,6 +316,10 @@ class _BusinessSettingsScreenState
                           ),
                           const SizedBox(height: 12),
                           _timezoneDropdown(),
+                          const SizedBox(height: 12),
+                          _currencyDropdown(),
+                          const SizedBox(height: 12),
+                          _localeDropdown(),
                         ],
                       ),
                     ),
@@ -393,6 +420,56 @@ class _BusinessSettingsScreenState
                 child: Text(tz),
               ))
           .toList(),
+    );
+  }
+
+  Widget _currencyDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _currency,
+      onChanged: (v) {
+        if (v != null) setState(() => _currency = v);
+      },
+      decoration: _dropdownDecoration('Currency', Icons.currency_exchange),
+      dropdownColor: AppColors.surfaceVariant,
+      iconEnabledColor: AppColors.textSecondary,
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+      isExpanded: true,
+      items: _currencies
+          .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+          .toList(),
+    );
+  }
+
+  Widget _localeDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _locale,
+      onChanged: (v) {
+        if (v != null) setState(() => _locale = v);
+      },
+      decoration: _dropdownDecoration('Language', Icons.language_outlined),
+      dropdownColor: AppColors.surfaceVariant,
+      iconEnabledColor: AppColors.textSecondary,
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+      isExpanded: true,
+      items: _locales.entries
+          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+          .toList(),
+    );
+  }
+
+  InputDecoration _dropdownDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+      labelStyle: const TextStyle(color: AppColors.textSecondary),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.primary),
+      ),
     );
   }
 

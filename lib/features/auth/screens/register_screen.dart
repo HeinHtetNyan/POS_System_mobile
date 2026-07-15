@@ -8,6 +8,7 @@ import '../../../models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_logo.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -231,25 +232,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'S',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryFg,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                    ),
+                    const AppLogo(size: 68, radius: 15),
                     const SizedBox(height: 16),
                     const Text(
                       'SawYun POS',

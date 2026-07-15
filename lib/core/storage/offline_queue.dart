@@ -37,6 +37,8 @@ class OfflineQueueService {
             customer_id TEXT,
             items_json TEXT NOT NULL,
             payments_json TEXT NOT NULL,
+            discount_amount REAL NOT NULL DEFAULT 0,
+            idempotency_key TEXT,
             attempts INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL
           )
@@ -59,6 +61,8 @@ class OfflineQueueService {
     String? customerId,
     required List<LocalCartItem> items,
     required List<CheckoutPayment> payments,
+    double discountAmount = 0,
+    String? idempotencyKey,
   }) async {
     final db = await _database;
     await db.insert('offline_orders', {
@@ -68,6 +72,8 @@ class OfflineQueueService {
       'customer_id': customerId,
       'items_json': jsonEncode(items.map((i) => i.toJson()).toList()),
       'payments_json': jsonEncode(payments.map((p) => p.toJson()).toList()),
+      'discount_amount': discountAmount,
+      'idempotency_key': idempotencyKey,
       'attempts': 0,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
@@ -85,9 +91,10 @@ class OfflineQueueService {
       final rows = await db.query('offline_orders', orderBy: 'created_at ASC');
       for (final row in rows) {
         final id = row['id'] as String;
-        final branchId = row['branch_id'] as String;
         final sessionId = row['session_id'] as String;
         final customerId = row['customer_id'] as String?;
+        final discountAmount = (row['discount_amount'] as num?)?.toDouble() ?? 0;
+        final idempotencyKey = row['idempotency_key'] as String?;
         final items = (jsonDecode(row['items_json'] as String) as List)
             .map((e) => LocalCartItem.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -97,28 +104,22 @@ class OfflineQueueService {
                     CheckoutPayment.fromJson(e as Map<String, dynamic>))
                 .toList();
         try {
-          final serverCart = await repo.createCart(
-            branchId: branchId,
-            cashierSessionId: sessionId,
-            customerId: customerId,
-          );
-          for (final item in items) {
-            await repo.addToCart(
-              cartId: serverCart.id,
-              productId: item.productId,
-              variantId: item.variantId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountAmount: item.discountAmount,
-              taxRate: item.taxRate,
-            );
-          }
           await repo.checkout(
-            branchId: branchId,
             cashierSessionId: sessionId,
-            cartId: serverCart.id,
+            items: items
+                .map((item) => CheckoutItemPayload(
+                      productId: item.productId,
+                      variantId: item.variantId,
+                      quantity: item.quantity,
+                      unitPrice: item.netUnitPrice,
+                      discountAmount: item.netDiscountAmount,
+                      taxRate: item.taxRate,
+                    ))
+                .toList(),
             payments: payments,
             customerId: customerId,
+            discountAmount: discountAmount,
+            idempotencyKey: idempotencyKey,
           );
           await db.delete('offline_orders',
               where: 'id = ?', whereArgs: [id]);

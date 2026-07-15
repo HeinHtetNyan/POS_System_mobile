@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/api/api_client.dart';
 import 'core/hardware/printer_service.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/datetime_formatter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,13 @@ void main() async {
 
   // Load persisted printer WiFi config
   await printerService.loadPersistedConfig();
+
+  // Load persisted date/time display preference (Settings → Preferences)
+  final prefs = await SharedPreferences.getInstance();
+  DateTimeFormatter.configure(
+    dateFormat: prefs.getString('user_preferences_date_format') ?? 'DD/MM/YYYY',
+    use24Hour: prefs.getBool('user_preferences_use_24h') ?? false,
+  );
 
   runApp(const ProviderScope(child: PosApp()));
 }

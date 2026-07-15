@@ -57,6 +57,11 @@ class _AdminBusinessDetailScreenState
   bool _overviewLoading = false;
   String? _overviewError;
 
+  // POS access toggles (super-admin only — server rejects writes from anyone else)
+  Map<String, dynamic>? _features;
+  bool _featuresLoading = false;
+  bool _featuresSaving = false;
+
   // Users
   List<Map<String, dynamic>> _users = [];
   bool _usersLoading = false;
@@ -102,6 +107,46 @@ class _AdminBusinessDetailScreenState
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadOverview();
+    _loadFeatures();
+  }
+
+  Future<void> _loadFeatures() async {
+    setState(() => _featuresLoading = true);
+    try {
+      final resp = await _dio.get('/tenants/${widget.tenantId}/settings');
+      final data = resp.data;
+      setState(() {
+        _features = data is Map<String, dynamic>
+            ? (data['features_enabled'] as Map<String, dynamic>? ?? {})
+            : {};
+      });
+    } catch (_) {
+      // Leave as null — toggles fall back to their documented defaults.
+    } finally {
+      if (mounted) setState(() => _featuresLoading = false);
+    }
+  }
+
+  Future<void> _updateFeature(String key, bool value) async {
+    setState(() => _featuresSaving = true);
+    try {
+      await _dio.patch(
+        '/tenants/${widget.tenantId}/settings',
+        data: {
+          'features_enabled': {key: value},
+        },
+      );
+      setState(() {
+        _features = {...?_features, key: value};
+      });
+      _showSnack('Updated', success: true);
+    } on DioException catch (e) {
+      _showSnack(AppException.fromDio(e).message);
+    } catch (e) {
+      _showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => _featuresSaving = false);
+    }
   }
 
   void _onTabChanged() {
@@ -1094,6 +1139,86 @@ class _AdminBusinessDetailScreenState
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          _buildPosAccessCard(),
+        ],
+      ),
+    );
+  }
+
+  // POS access — super-admin-only toggles; this tenant's own users cannot
+  // change these (server rejects the write for any non-SUPER_ADMIN role).
+  Widget _buildPosAccessCard() {
+    final smallScreenCheckout =
+        _features?['pos_small_screen_checkout'] as bool? ?? false;
+    final cameraScanner = _features?['pos_camera_scanner'] as bool? ?? true;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('POS Access',
+              style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          const Text('Super-admin only — this business\'s own users cannot change these.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+          const SizedBox(height: 8),
+          if (_featuresLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary)),
+            )
+          else ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('Allow Checkout on Small Screens',
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500)),
+              subtitle: const Text(
+                  'By default, checkout requires a tablet-sized screen or larger',
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              value: smallScreenCheckout,
+              onChanged: _featuresSaving
+                  ? null
+                  : (v) => _updateFeature('pos_small_screen_checkout', v),
+              activeThumbColor: AppColors.primary,
+              activeTrackColor: AppColors.primary.withValues(alpha: 0.3),
+            ),
+            const Divider(color: AppColors.divider, height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('Camera Barcode Scanner',
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500)),
+              subtitle: const Text(
+                  'Show the camera scan button on the checkout screen',
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              value: cameraScanner,
+              onChanged: _featuresSaving
+                  ? null
+                  : (v) => _updateFeature('pos_camera_scanner', v),
+              activeThumbColor: AppColors.primary,
+              activeTrackColor: AppColors.primary.withValues(alpha: 0.3),
+            ),
+          ],
         ],
       ),
     );

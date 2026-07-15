@@ -1,0 +1,111 @@
+// Mirrors the web app's `frontend/src/i18n/translations.ts` — same key
+// names and the same professionally-translated Burmese strings, so the two
+// clients read identically for any screen that's been wired up here.
+// Coverage is intentionally a subset (common actions, navigation, and the
+// Settings screens) rather than a line-for-line port of web's ~4000 keys;
+// extending further screens means adding keys here and calling t('key')
+// in place of a literal string — no other plumbing needed.
+const Map<String, Map<String, String>> kTranslations = {
+  'en': {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.checkout': 'Checkout',
+    'nav.sales': 'Sales',
+    'nav.products': 'Products',
+    'nav.inventory': 'Inventory',
+    'nav.customers': 'Wholesale Customers',
+    'nav.procurement': 'Procurement',
+    'nav.analytics': 'Analytics',
+    'nav.notifications': 'Notifications',
+    'nav.subscription': 'Subscription',
+    'nav.settings': 'Settings',
+
+    // Common
+    'common.search': 'Search…',
+    'common.sign_out': 'Sign Out',
+    'common.save_changes': 'Save Changes',
+    'common.saving': 'Saving…',
+    'common.cancel': 'Cancel',
+    'common.edit': 'Edit',
+    'common.delete': 'Delete',
+    'common.close': 'Close',
+    'common.new': 'New',
+    'common.add': 'Add',
+    'common.print': 'Print',
+    'common.confirm': 'Confirm',
+    'common.loading': 'Loading…',
+
+    // Settings
+    'settings.title': 'Settings',
+    'settings.tab.business': 'Business Profile',
+    'settings.tab.branches': 'Branches',
+    'settings.tab.staff': 'Staff',
+    'settings.tab.receipt': 'Receipt',
+    'settings.tab.tax': 'Tax',
+    'settings.tab.preferences': 'Preferences',
+    'settings.business_info': 'Business Information',
+    'settings.business_name': 'Business Name',
+    'settings.email': 'Email',
+    'settings.phone': 'Phone',
+    'settings.address': 'Address',
+    'settings.lang_currency': 'Language & Currency',
+    'settings.timezone': 'Timezone',
+    'settings.currency': 'Currency',
+    'settings.language': 'Language',
+    'settings.time_format': 'Time Format',
+    'settings.time_12h': '12-hour',
+    'settings.time_24h': '24-hour',
+    'settings.save_failed': 'Failed to save',
+  },
+  'my': {
+    // Navigation
+    'nav.dashboard': 'ဒက်ရှ်ဘုတ်',
+    'nav.checkout': 'ငွေကောက်ခြင်း',
+    'nav.sales': 'အရောင်းများ',
+    'nav.products': 'ကုန်ပစ္စည်းများ',
+    'nav.inventory': 'ကုန်လှောင်မှု',
+    'nav.customers': 'လက်ကားဖောက်သည်များ',
+    'nav.procurement': 'ကုန်ဝယ်ယူရေး',
+    'nav.analytics': 'ကိန်းဂဏန်းခွဲခြမ်း',
+    'nav.notifications': 'အကြောင်းကြားချက်များ',
+    'nav.subscription': 'အသင်းဝင်မှု',
+    'nav.settings': 'ဆက်တင်',
+
+    // Common
+    'common.search': 'ရှာဖွေ…',
+    'common.sign_out': 'ထွက်ရန်',
+    'common.save_changes': 'ပြောင်းလဲမှုများ သိမ်းရန်',
+    'common.saving': 'သိမ်းနေသည်…',
+    'common.cancel': 'မလုပ်တော့ပါ',
+    'common.edit': 'ပြင်ဆင်',
+    'common.delete': 'ဖျက်',
+    'common.close': 'ပိတ်',
+    'common.new': 'အသစ်',
+    'common.add': 'ထည့်သွင်း',
+    'common.print': 'ပရင့်',
+    'common.confirm': 'အတည်ပြု',
+    'common.loading': 'တင်နေသည်…',
+
+    // Settings
+    'settings.title': 'ဆက်တင်',
+    'settings.tab.business': 'စီးပွားရေး ပရိုဖိုင်',
+    'settings.tab.branches': 'ဌာနခွဲများ',
+    'settings.tab.staff': 'ဝန်ထမ်းများ',
+    'settings.tab.receipt': 'ပြေစာ',
+    'settings.tab.tax': 'အခွန်',
+    'settings.tab.preferences': 'နှစ်သက်မှုများ',
+    'settings.business_info': 'စီးပွားရေး အချက်အလက်',
+    'settings.business_name': 'စီးပွားရေး အမည်',
+    'settings.email': 'အီးမေးလ်',
+    'settings.phone': 'ဖုန်းနံပါတ်',
+    'settings.address': 'လိပ်စာ',
+    'settings.lang_currency': 'ဘာသာစကားနှင့် ငွေကြေး',
+    'settings.timezone': 'အချိန်ဇုန်',
+    'settings.currency': 'ငွေကြေး',
+    'settings.language': 'ဘာသာစကား',
+    'settings.time_format': 'အချိန်ဖော်မတ်',
+    'settings.time_12h': '၁၂ နာရီ',
+    'settings.time_24h': '၂၄ နာရီ',
+    'settings.save_failed': 'သိမ်းဆည်းမှု မအောင်မြင်ပါ',
+  },
+};

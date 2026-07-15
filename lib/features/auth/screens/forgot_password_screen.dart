@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_logo.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -111,26 +112,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Amber square badge with "S"
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'S',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primaryFg,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ),
-                      ),
+                      const AppLogo(size: 64, radius: 14),
                       const SizedBox(height: 16),
                       const Text(
                         'Reset Password',

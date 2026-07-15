@@ -146,33 +146,32 @@ class PosRepository {
     }
   }
 
-  // Checkout
+  // Checkout — POST /sales/checkout is transactional and ALL-OR-NOTHING
+  // (creates the order, deducts stock, records payments, generates the
+  // receipt in one DB transaction), so it takes the cart's line items
+  // directly rather than a server-side cart_id. It does not accept
+  // branch_id, cart_id, discount_type, or discount_value — only the fields
+  // below (matching backend CheckoutRequest exactly).
   Future<OrderModel> checkout({
-    required String branchId,
     required String cashierSessionId,
-    required String cartId,
+    required List<CheckoutItemPayload> items,
     required List<CheckoutPayment> payments,
     String? customerId,
     String? notes,
-    String? orderDiscountType,
-    double? orderDiscountValue,
+    double discountAmount = 0,
+    String? idempotencyKey,
   }) async {
     try {
       final response = await apiClient.post(
         ApiEndpoints.checkout,
         data: {
-          'branch_id': branchId,
           'cashier_session_id': cashierSessionId,
-          'cart_id': cartId,
-          if (customerId != null) 'customer_id': customerId,
+          'items': items.map((i) => i.toJson()).toList(),
           'payments': payments.map((p) => p.toJson()).toList(),
+          if (customerId != null) 'customer_id': customerId,
           if (notes != null) 'notes': notes,
-          if (orderDiscountType != null &&
-              orderDiscountValue != null &&
-              orderDiscountValue > 0) ...{
-            'discount_type': orderDiscountType,
-            'discount_value': orderDiscountValue,
-          },
+          if (discountAmount > 0) 'discount_amount': discountAmount,
+          if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
         },
       );
       return OrderModel.fromJson(response.data as Map<String, dynamic>);
@@ -242,6 +241,35 @@ class PosRepository {
       throw AppException.fromDio(e);
     }
   }
+}
+
+// Matches backend CheckoutItemRequest: product_id, quantity, unit_price
+// (pre-tax), discount_amount (pre-tax), tax_rate (fraction 0-1).
+class CheckoutItemPayload {
+  final String productId;
+  final String? variantId;
+  final int quantity;
+  final double unitPrice;
+  final double discountAmount;
+  final double taxRate;
+
+  const CheckoutItemPayload({
+    required this.productId,
+    this.variantId,
+    required this.quantity,
+    required this.unitPrice,
+    required this.discountAmount,
+    required this.taxRate,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'product_id': productId,
+        if (variantId != null) 'variant_id': variantId,
+        'quantity': quantity,
+        'unit_price': unitPrice,
+        'discount_amount': discountAmount,
+        'tax_rate': taxRate,
+      };
 }
 
 class CheckoutPayment {

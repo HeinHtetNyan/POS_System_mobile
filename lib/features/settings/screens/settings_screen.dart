@@ -7,6 +7,7 @@ import '../../../core/hardware/printer_service.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/i18n/locale_provider.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../models/user_model.dart';
@@ -22,13 +23,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    final t = ref.watch(translateProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
-        title: const Text('Settings',
-            style: TextStyle(color: AppColors.textPrimary)),
+        title: Text(t('settings.title'),
+            style: const TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       body: ContentWrapper(
@@ -177,7 +179,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     tileColor: Colors.transparent,
                     leading: const Icon(Icons.receipt_long_outlined,
                         color: AppColors.primary),
-                    title: const Text('Receipt Settings',
+                    title: Text(t('settings.tab.receipt'),
                         style: TextStyle(color: AppColors.textPrimary)),
                     subtitle: const Text(
                         'Header, footer, paper size & display',
@@ -196,7 +198,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     tileColor: Colors.transparent,
                     leading: const Icon(Icons.percent,
                         color: AppColors.primary),
-                    title: const Text('Tax Settings',
+                    title: Text(t('settings.tab.tax'),
                         style: TextStyle(color: AppColors.textPrimary)),
                     subtitle: const Text(
                         'Tax rate, name & type',
@@ -215,7 +217,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     tileColor: Colors.transparent,
                     leading: const Icon(Icons.tune_outlined,
                         color: AppColors.primary),
-                    title: const Text('Preferences',
+                    title: Text(t('settings.tab.preferences'),
                         style: TextStyle(color: AppColors.textPrimary)),
                     subtitle: const Text(
                         'Currency, date format & display',
@@ -225,6 +227,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     trailing: const Icon(Icons.chevron_right,
                         color: AppColors.textSecondary),
                     onTap: () => context.push('/settings/preferences'),
+                  ),
+                  Divider(
+                      height: 1,
+                      indent: 56,
+                      color: AppColors.divider),
+                  ListTile(
+                    tileColor: Colors.transparent,
+                    leading: const Icon(Icons.notifications_outlined,
+                        color: AppColors.primary),
+                    title: const Text('Notification Preferences',
+                        style: TextStyle(color: AppColors.textPrimary)),
+                    subtitle: const Text(
+                        'Choose which alerts you receive',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary)),
+                    trailing: const Icon(Icons.chevron_right,
+                        color: AppColors.textSecondary),
+                    onTap: () => context.push('/notifications/preferences'),
                   ),
                 ],
               ),

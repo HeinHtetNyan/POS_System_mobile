@@ -55,6 +55,7 @@ class CartItemModel {
   final int quantity;
   final double unitPrice;
   final double discountAmount;
+  // Fraction (0-1) — matches the backend's CartItemRequest/Response contract.
   final double taxRate;
   final String? sku;
   final String? barcode;
@@ -74,7 +75,7 @@ class CartItemModel {
   });
 
   double get lineSubtotal => unitPrice * quantity;
-  double get taxAmount => lineSubtotal * (taxRate / 100);
+  double get taxAmount => lineSubtotal * taxRate;
   double get lineTotal => lineSubtotal + taxAmount;
 
   String get displayName =>
@@ -123,7 +124,13 @@ class LocalCartItem {
   int quantity;
   final double unitPrice;
   double discountAmount;
+  // Fraction (0-1) — matches the backend's CartItemRequest/Response contract.
+  // Set from the tenant's uniform Tax Settings rate (not per-product), same
+  // as the web app's checkout math (see PosCartNotifier.configureTax).
   final double taxRate;
+  // Whether taxRate is already baked into unitPrice (tenant Tax Settings
+  // "inclusive" mode) — mirrors web's useCartTotals() inclusive/exclusive split.
+  final bool taxInclusive;
   final String? sku;
   final String? barcode;
 
@@ -136,13 +143,32 @@ class LocalCartItem {
     required this.unitPrice,
     required this.discountAmount,
     required this.taxRate,
+    this.taxInclusive = false,
     this.sku,
     this.barcode,
   });
 
   double get lineSubtotal => unitPrice * quantity;
-  double get taxAmount => lineSubtotal * (taxRate / 100);
-  double get lineTotal => lineSubtotal + taxAmount;
+
+  // Exclusive: tax is added on top of the price.
+  // Inclusive: tax is already baked into the price — extract it instead of adding it.
+  double get taxAmount => taxInclusive
+      ? lineSubtotal * taxRate / (1 + taxRate)
+      : lineSubtotal * taxRate;
+
+  // Gross total for this line — for inclusive tax the price already contains
+  // the tax, so the line's total is just its subtotal.
+  double get lineTotal => taxInclusive ? lineSubtotal : lineSubtotal + taxAmount;
+
+  // Pre-tax unit price — what gets sent to the backend as `unit_price` so its
+  // `price * tax_rate` formula yields the same extracted tax amount as above.
+  double get netUnitPrice => taxInclusive ? unitPrice / (1 + taxRate) : unitPrice;
+
+  // discountAmount is a per-unit reduction entered against the (possibly
+  // gross) displayed price — convert it onto the same net basis as
+  // netUnitPrice so the backend doesn't discount a net price by a gross amount.
+  double get netDiscountAmount =>
+      taxInclusive ? discountAmount / (1 + taxRate) : discountAmount;
 
   String get displayName =>
       variantName != null ? '$productName - $variantName' : productName;
@@ -158,6 +184,7 @@ class LocalCartItem {
         'unit_price': unitPrice,
         'discount_amount': discountAmount,
         'tax_rate': taxRate,
+        'tax_inclusive': taxInclusive,
         if (sku != null) 'sku': sku,
         if (barcode != null) 'barcode': barcode,
       };
@@ -171,6 +198,7 @@ class LocalCartItem {
         unitPrice: (json['unit_price'] as num).toDouble(),
         discountAmount: (json['discount_amount'] as num).toDouble(),
         taxRate: (json['tax_rate'] as num).toDouble(),
+        taxInclusive: json['tax_inclusive'] as bool? ?? false,
         sku: json['sku'] as String?,
         barcode: json['barcode'] as String?,
       );

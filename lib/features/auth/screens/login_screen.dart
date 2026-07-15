@@ -5,6 +5,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_logo.dart';
 import '../../../models/auth_models.dart';
 
 enum _LoginMode { owner, staff }
@@ -165,28 +166,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'N',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primaryFg,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ),
-                      ),
+                      const AppLogo(size: 72, radius: 16),
                       const SizedBox(height: 16),
                       const Text(
-                        'NexusPOS',
+                        'SawYun POS',
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w700,
@@ -196,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Enterprise Point of Sale',
+                        'POS System for All Businesses',
                         style: TextStyle(
                           fontSize: 15,
                           color: AppColors.textSecondary,

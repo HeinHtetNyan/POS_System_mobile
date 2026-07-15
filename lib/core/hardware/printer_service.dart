@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:usb_serial/usb_serial.dart';
 import '../../models/order_model.dart';
 import '../../models/product_model.dart';
+import '../../models/receipt_options_model.dart';
 import '../utils/currency_formatter.dart';
 
 // Supports:
@@ -196,60 +197,123 @@ class PrinterService {
 
   // ESC/POS receipt builder
 
-  List<int> buildReceipt(OrderModel order,
-      {String? businessName, String? footer}) {
+  List<int> buildReceipt(
+    OrderModel order, {
+    String? businessName,
+    String? header,
+    String? footer,
+    String? cashierName,
+    bool showTaxOnReceipt = true,
+    ReceiptOptions options = ReceiptOptions.defaults,
+  }) {
     final bytes = <int>[];
+    // Narrow 58mm paper fits ~32 cols at normal font; 80mm/A4 fit ~42-48.
+    final width = options.paperSize == '58mm' ? 32 : 42;
+    // ESC/POS GS ! n — bit 0-3 width multiplier, bit 4-7 height multiplier.
+    final fontCmd = switch (options.fontSize) {
+      'small' => [0x1D, 0x21, 0x00],
+      'large' => [0x1D, 0x21, 0x11],
+      _ => [0x1D, 0x21, 0x00],
+    };
 
     bytes.addAll([0x1B, 0x40]); // ESC @ — init
+    bytes.addAll(fontCmd);
     bytes.addAll([0x1B, 0x61, 0x01]); // center
+
+    if (header != null && header.trim().isNotEmpty) {
+      bytes.addAll(_encode('${header.trim()}\n'));
+    }
 
     // Business name
     bytes.addAll([0x1B, 0x45, 0x01]);
     bytes.addAll([0x1D, 0x21, 0x11]);
     bytes.addAll(_encode('${businessName ?? 'SawYun POS'}\n'));
-    bytes.addAll([0x1D, 0x21, 0x00]);
+    bytes.addAll(fontCmd);
     bytes.addAll([0x1B, 0x45, 0x00]);
 
-    bytes.addAll(_encode('--------------------------------\n'));
-    bytes.addAll(_encode('Order: ${order.orderNumber}\n'));
-    bytes.addAll(_encode('--------------------------------\n'));
+    bytes.addAll(_encode('${'-' * width}\n'));
+    if (options.showOrderNumber) {
+      bytes.addAll(_encode('Order: ${order.orderNumber}\n'));
+    }
+    bytes.addAll(_encode('${'-' * width}\n'));
 
     bytes.addAll([0x1B, 0x61, 0x00]); // left
     for (final item in order.items) {
-      final name = item.displayName.length > 20
-          ? item.displayName.substring(0, 20)
+      final name = item.displayName.length > width - 2
+          ? item.displayName.substring(0, width - 2)
           : item.displayName;
       bytes.addAll(_encode(
         '$name\n  x${item.quantityOrdered} @ '
         '${CurrencyFormatter.formatCompact(item.unitPrice)}  '
         '${CurrencyFormatter.formatCompact(item.lineTotal)}\n',
       ));
+      if (options.showItemTax && item.taxRate > 0) {
+        bytes.addAll(_encode(_pad(
+            '  Tax (${(item.taxRate * 100).toStringAsFixed(0)}%):',
+            CurrencyFormatter.formatCompact(
+                item.lineTotal - item.unitPrice * item.quantityOrdered),
+            width: width)));
+      }
+      if (options.showCostPrice && item.unitCostSnapshot != null) {
+        bytes.addAll(_encode(_pad('  Cost:',
+            CurrencyFormatter.formatCompact(
+                item.unitCostSnapshot! * item.quantityOrdered),
+            width: width)));
+      }
+      if (options.showMargin &&
+          item.unitCostSnapshot != null &&
+          item.unitPrice > 0) {
+        final margin =
+            (item.unitPrice - item.unitCostSnapshot!) / item.unitPrice * 100;
+        bytes.addAll(
+            _encode(_pad('  Margin:', '${margin.toStringAsFixed(0)}%', width: width)));
+      }
     }
 
-    bytes.addAll(_encode('--------------------------------\n'));
-    bytes.addAll(_encode(_pad('Subtotal:', CurrencyFormatter.formatCompact(order.grossTotal))));
-    if (order.taxTotal > 0) {
-      bytes.addAll(_encode(_pad('Tax:', CurrencyFormatter.formatCompact(order.taxTotal))));
+    bytes.addAll(_encode('${'-' * width}\n'));
+    bytes.addAll(_encode(_pad('Subtotal:', CurrencyFormatter.formatCompact(order.grossTotal), width: width)));
+    if (showTaxOnReceipt && order.taxTotal > 0) {
+      bytes.addAll(_encode(_pad('Tax:', CurrencyFormatter.formatCompact(order.taxTotal), width: width)));
     }
     if (order.discountTotal > 0) {
-      bytes.addAll(_encode(_pad('Discount:', '-${CurrencyFormatter.formatCompact(order.discountTotal)}')));
+      bytes.addAll(_encode(_pad('Discount:', '-${CurrencyFormatter.formatCompact(order.discountTotal)}', width: width)));
     }
     bytes.addAll([0x1B, 0x45, 0x01]);
-    bytes.addAll(_encode(_pad('TOTAL:', CurrencyFormatter.format(order.netTotal))));
+    bytes.addAll(_encode(_pad('TOTAL:', CurrencyFormatter.format(order.netTotal), width: width)));
     bytes.addAll([0x1B, 0x45, 0x00]);
 
     if (order.payments.isNotEmpty) {
-      bytes.addAll(_encode('--------------------------------\n'));
+      bytes.addAll(_encode('${'-' * width}\n'));
       for (final p in order.payments) {
         bytes.addAll(_encode(
           _pad('${PaymentMethod.displayName(p.paymentMethod)}:',
-              CurrencyFormatter.formatCompact(p.amount)),
+              CurrencyFormatter.formatCompact(p.amount), width: width),
         ));
       }
     }
 
+    if (options.showCashierName && cashierName != null && cashierName.isNotEmpty) {
+      bytes.addAll([0x1B, 0x61, 0x01]); // center
+      bytes.addAll(_encode('Cashier: $cashierName\n'));
+    }
+
     bytes.addAll([0x1B, 0x61, 0x01]); // center
-    bytes.addAll(_encode('\n${footer ?? 'Thank you for your purchase!'}\n'));
+    bytes.addAll(_encode('\n${footer?.trim().isNotEmpty == true ? footer!.trim() : 'Thank you for your purchase!'}\n'));
+
+    if (options.showBarcode) {
+      bytes.addAll(_encode('\n'));
+      // GS k m d1...dk NUL — CODE39 barcode of the order number.
+      final code = order.orderNumber.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9\-.\ \$/+%]'), '');
+      if (code.isNotEmpty) {
+        bytes.addAll([0x1D, 0x68, 0x50]); // barcode height
+        bytes.addAll([0x1D, 0x77, 0x02]); // barcode width
+        bytes.addAll([0x1D, 0x48, 0x02]); // print HRI text below barcode
+        bytes.addAll([0x1D, 0x6B, 0x04]); // CODE39
+        bytes.addAll(_encode(code));
+        bytes.add(0x00);
+      }
+    }
+
     bytes.addAll(_encode('\n\n\n'));
     bytes.addAll([0x1D, 0x56, 0x00]); // full cut
 
@@ -357,12 +421,24 @@ class PrinterService {
   Future<bool> printReceipt(
     OrderModel order, {
     String? businessName,
+    String? header,
     String? footer,
+    String? cashierName,
+    bool showTaxOnReceipt = true,
+    ReceiptOptions options = ReceiptOptions.defaults,
     bool openDrawer = false,
     String? wifiIp,
     int wifiPort = 9100,
   }) async {
-    final data = buildReceipt(order, businessName: businessName, footer: footer);
+    final data = buildReceipt(
+      order,
+      businessName: businessName,
+      header: header,
+      footer: footer,
+      cashierName: cashierName,
+      showTaxOnReceipt: showTaxOnReceipt,
+      options: options,
+    );
     if (openDrawer) data.addAll(openCashDrawerCommand());
 
     // USB / Serial

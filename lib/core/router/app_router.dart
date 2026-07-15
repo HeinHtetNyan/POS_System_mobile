@@ -84,6 +84,7 @@ import '../../features/reseller/screens/reseller_profile_screen.dart';
 import '../../features/reseller/screens/reseller_notifications_screen.dart';
 import '../../features/reseller/screens/reseller_plans_screen.dart';
 import '../../features/superadmin/screens/platform_notifications_screen.dart';
+import '../../features/superadmin/screens/app_download_links_screen.dart';
 import '../../features/settings/screens/profile_settings_screen.dart';
 import '../../features/subscription/screens/trial_expired_screen.dart';
 import '../providers/auth_provider.dart';
@@ -145,11 +146,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      final isCashierHomeRoute =
-          loc == '/pos' || loc == '/dashboard/cashier';
-      if (authState.user!.isCashier && isCashierHomeRoute) {
+      // /pos is reachable by cashiers, business owners, and managers alike
+      // (e.g. an owner running checkout themselves) — all of them need an
+      // open cash-register session before the checkout screen is usable.
+      // /dashboard/cashier stays cashier-only, matching its role-specific home route.
+      final needsSessionCheck = (loc == '/pos' &&
+              (authState.user!.isCashier ||
+                  authState.user!.isBusinessOwner ||
+                  authState.user!.isManager)) ||
+          (loc == '/dashboard/cashier' && authState.user!.isCashier);
+      if (needsSessionCheck) {
         // Attempt to restore any existing open session before deciding where
-        // to send the cashier.  Only fetch if we don't already have state.
+        // to send the user.  Only fetch if we don't already have state.
         if (!sessionState.hasOpenSession && !sessionState.isLoading) {
           await ref.read(sessionProvider.notifier).loadOpenSession();
         }
@@ -544,6 +552,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/notifications',
             builder: (_, __) => const PlatformNotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/admin/app-download-links',
+            builder: (_, __) => const AppDownloadLinksScreen(),
           ),
           GoRoute(
             path: '/subscription',

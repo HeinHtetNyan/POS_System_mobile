@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/user_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/tenant_settings_provider.dart';
+import '../i18n/locale_provider.dart';
+import 'app_logo.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import '../../features/notifications/providers/notifications_provider.dart';
@@ -23,13 +26,18 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    // Triggers the tenant-wide currency/tax/receipt settings fetch as soon
+    // as the user lands anywhere in the shell, so CurrencyFormatter and
+    // downstream screens (POS, receipts) have it ready before they're opened.
+    ref.watch(tenantSettingsProvider);
     final unreadCount = ref.watch(unreadCountProvider);
     final location = GoRouterState.of(context).matchedLocation;
     final isWide = Responsive.isWide(context);
 
     if (user == null) return widget.child;
 
-    final navItems = _navItems(user.role);
+    final t = ref.watch(translateProvider);
+    final navItems = _navItems(user.role, t);
 
     if (isWide) {
       // Tablet / desktop: persistent sidebar
@@ -118,21 +126,7 @@ class _AppTopBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       title: Row(
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Center(
-              child: Text('S',
-                  style: TextStyle(
-                      color: AppColors.primaryFg,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13)),
-            ),
-          ),
+          const AppLogo(size: 24, radius: 6),
           const SizedBox(width: 8),
           Text(title,
               style: const TextStyle(
@@ -198,21 +192,7 @@ class _Sidebar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Center(
-                    child: Text('S',
-                        style: TextStyle(
-                            color: AppColors.primaryFg,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18)),
-                  ),
-                ),
+                const AppLogo(size: 34, radius: 10),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,11 +451,11 @@ class _NavItem {
   });
 }
 
-List<_NavItem> _navItems(String role) {
+List<_NavItem> _navItems(String role, Translate t) {
   switch (role) {
     case UserRole.superAdmin:
-      return const [
-        _NavItem(label: 'Dashboard',    icon: Icons.space_dashboard_outlined,  selectedIcon: Icons.space_dashboard,  path: '/dashboard/admin'),
+      return [
+        _NavItem(label: t('nav.dashboard'),    icon: Icons.space_dashboard_outlined,  selectedIcon: Icons.space_dashboard,  path: '/dashboard/admin'),
         _NavItem(label: 'Businesses',   icon: Icons.business_outlined,          selectedIcon: Icons.business,          path: '/admin/tenants'),
         _NavItem(label: 'Users',        icon: Icons.people_outline,             selectedIcon: Icons.people,            path: '/admin/users'),
         _NavItem(label: 'Resellers',    icon: Icons.handshake_outlined,         selectedIcon: Icons.handshake,         path: '/admin/resellers'),
@@ -486,63 +466,64 @@ List<_NavItem> _navItems(String role) {
         _NavItem(label: 'Audit Logs',      icon: Icons.history_outlined,           selectedIcon: Icons.history,           path: '/admin/audit'),
         _NavItem(label: 'Notifs',          icon: Icons.campaign_outlined,          selectedIcon: Icons.campaign,          path: '/admin/notifications'),
         _NavItem(label: 'Payment Methods', icon: Icons.payment_outlined,           selectedIcon: Icons.payment,           path: '/admin/payment-methods'),
-        _NavItem(label: 'Notifications',   icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,     path: '/notifications'),
-        _NavItem(label: 'Settings',        icon: Icons.settings_outlined,          selectedIcon: Icons.settings,          path: '/settings'),
+        _NavItem(label: 'App Downloads',   icon: Icons.download_outlined,          selectedIcon: Icons.download,          path: '/admin/app-download-links'),
+        _NavItem(label: t('nav.notifications'),   icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,     path: '/notifications'),
+        _NavItem(label: t('nav.settings'),        icon: Icons.settings_outlined,          selectedIcon: Icons.settings,          path: '/settings'),
       ];
     case UserRole.reseller:
-      return const [
-        _NavItem(label: 'Dashboard',    icon: Icons.space_dashboard_outlined,        selectedIcon: Icons.space_dashboard,       path: '/reseller/dashboard'),
+      return [
+        _NavItem(label: t('nav.dashboard'),    icon: Icons.space_dashboard_outlined,        selectedIcon: Icons.space_dashboard,       path: '/reseller/dashboard'),
         _NavItem(label: 'Businesses',   icon: Icons.business_outlined,               selectedIcon: Icons.business,              path: '/reseller/businesses'),
-        _NavItem(label: 'Analytics',    icon: Icons.bar_chart_rounded,               selectedIcon: Icons.bar_chart_rounded,     path: '/reseller/analytics'),
+        _NavItem(label: t('nav.analytics'),    icon: Icons.bar_chart_rounded,               selectedIcon: Icons.bar_chart_rounded,     path: '/reseller/analytics'),
         _NavItem(label: 'Plans',        icon: Icons.card_membership_outlined,        selectedIcon: Icons.card_membership,       path: '/reseller/plans'),
-        _NavItem(label: 'Customers',    icon: Icons.people_outline,                  selectedIcon: Icons.people,                path: '/reseller/customers'),
-        _NavItem(label: 'Inventory',    icon: Icons.inventory_2_outlined,            selectedIcon: Icons.inventory_2,           path: '/reseller/inventory'),
-        _NavItem(label: 'Procurement',  icon: Icons.shopping_cart_outlined,          selectedIcon: Icons.shopping_cart,         path: '/reseller/procurement'),
+        _NavItem(label: t('nav.customers'),    icon: Icons.people_outline,                  selectedIcon: Icons.people,                path: '/reseller/customers'),
+        _NavItem(label: t('nav.inventory'),    icon: Icons.inventory_2_outlined,            selectedIcon: Icons.inventory_2,           path: '/reseller/inventory'),
+        _NavItem(label: t('nav.procurement'),  icon: Icons.shopping_cart_outlined,          selectedIcon: Icons.shopping_cart,         path: '/reseller/procurement'),
         _NavItem(label: 'Commissions',  icon: Icons.payments_outlined,               selectedIcon: Icons.payments,              path: '/reseller/commissions'),
         _NavItem(label: 'Wallet',       icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet, path: '/reseller/wallet'),
         _NavItem(label: 'Profile',      icon: Icons.person_outlined,                 selectedIcon: Icons.person,                path: '/reseller/profile'),
-        _NavItem(label: 'Notifications',icon: Icons.notifications_outlined,          selectedIcon: Icons.notifications,         path: '/reseller/notifications'),
-        _NavItem(label: 'Settings',     icon: Icons.settings_outlined,               selectedIcon: Icons.settings,              path: '/settings'),
+        _NavItem(label: t('nav.notifications'),icon: Icons.notifications_outlined,          selectedIcon: Icons.notifications,         path: '/reseller/notifications'),
+        _NavItem(label: t('nav.settings'),     icon: Icons.settings_outlined,               selectedIcon: Icons.settings,              path: '/settings'),
       ];
     case UserRole.inventoryStaff:
-      return const [
-        _NavItem(label: 'Inventory',    icon: Icons.warehouse_outlined,         selectedIcon: Icons.warehouse,         path: '/inventory'),
-        _NavItem(label: 'Products',     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,       path: '/products'),
+      return [
+        _NavItem(label: t('nav.inventory'),    icon: Icons.warehouse_outlined,         selectedIcon: Icons.warehouse,         path: '/inventory'),
+        _NavItem(label: t('nav.products'),     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,       path: '/products'),
         _NavItem(label: 'Brands',       icon: Icons.label_outline,              selectedIcon: Icons.label,             path: '/brands'),
         _NavItem(label: 'Categories',   icon: Icons.category_outlined,          selectedIcon: Icons.category,          path: '/categories'),
-        _NavItem(label: 'Procurement',  icon: Icons.local_shipping_outlined,    selectedIcon: Icons.local_shipping,    path: '/procurement'),
-        _NavItem(label: 'Notifications',icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,     path: '/notifications'),
-        _NavItem(label: 'Settings',     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,          path: '/settings'),
+        _NavItem(label: t('nav.procurement'),  icon: Icons.local_shipping_outlined,    selectedIcon: Icons.local_shipping,    path: '/procurement'),
+        _NavItem(label: t('nav.notifications'),icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,     path: '/notifications'),
+        _NavItem(label: t('nav.settings'),     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,          path: '/settings'),
       ];
     case UserRole.cashier:
-      return const [
-        _NavItem(label: 'Dashboard',    icon: Icons.space_dashboard_outlined,   selectedIcon: Icons.space_dashboard,       path: '/dashboard/cashier'),
-        _NavItem(label: 'Checkout',     icon: Icons.point_of_sale_rounded,      selectedIcon: Icons.point_of_sale_rounded, path: '/pos'),
-        _NavItem(label: 'Orders',       icon: Icons.receipt_long_outlined,      selectedIcon: Icons.receipt_long,          path: '/orders'),
-        _NavItem(label: 'Products',     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,           path: '/products'),
-        _NavItem(label: 'Customers',    icon: Icons.people_outline,             selectedIcon: Icons.people,                path: '/customers'),
-        _NavItem(label: 'Notifications',icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,         path: '/notifications'),
-        _NavItem(label: 'Settings',     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,              path: '/settings'),
+      return [
+        _NavItem(label: t('nav.dashboard'),    icon: Icons.space_dashboard_outlined,   selectedIcon: Icons.space_dashboard,       path: '/dashboard/cashier'),
+        _NavItem(label: t('nav.checkout'),     icon: Icons.point_of_sale_rounded,      selectedIcon: Icons.point_of_sale_rounded, path: '/pos'),
+        _NavItem(label: t('nav.sales'),       icon: Icons.receipt_long_outlined,      selectedIcon: Icons.receipt_long,          path: '/orders'),
+        _NavItem(label: t('nav.products'),     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,           path: '/products'),
+        _NavItem(label: t('nav.customers'),    icon: Icons.people_outline,             selectedIcon: Icons.people,                path: '/customers'),
+        _NavItem(label: t('nav.notifications'),icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,         path: '/notifications'),
+        _NavItem(label: t('nav.settings'),     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,              path: '/settings'),
       ];
     case UserRole.businessOwner:
     case UserRole.manager:
     default:
-      return const [
-        _NavItem(label: 'Dashboard',    icon: Icons.space_dashboard_outlined,   selectedIcon: Icons.space_dashboard,       path: '/dashboard/manager'),
-        _NavItem(label: 'Checkout',     icon: Icons.point_of_sale_rounded,      selectedIcon: Icons.point_of_sale_rounded, path: '/pos'),
-        _NavItem(label: 'Orders',       icon: Icons.receipt_long_outlined,      selectedIcon: Icons.receipt_long,          path: '/orders'),
-        _NavItem(label: 'Products',     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,           path: '/products'),
+      return [
+        _NavItem(label: t('nav.dashboard'),    icon: Icons.space_dashboard_outlined,   selectedIcon: Icons.space_dashboard,       path: '/dashboard/manager'),
+        _NavItem(label: t('nav.checkout'),     icon: Icons.point_of_sale_rounded,      selectedIcon: Icons.point_of_sale_rounded, path: '/pos'),
+        _NavItem(label: t('nav.sales'),       icon: Icons.receipt_long_outlined,      selectedIcon: Icons.receipt_long,          path: '/orders'),
+        _NavItem(label: t('nav.products'),     icon: Icons.inventory_2_outlined,       selectedIcon: Icons.inventory_2,           path: '/products'),
         _NavItem(label: 'Brands',       icon: Icons.label_outline,              selectedIcon: Icons.label,                 path: '/brands'),
         _NavItem(label: 'Categories',   icon: Icons.category_outlined,          selectedIcon: Icons.category,              path: '/categories'),
-        _NavItem(label: 'Inventory',    icon: Icons.warehouse_outlined,         selectedIcon: Icons.warehouse,             path: '/inventory'),
-        _NavItem(label: 'Customers',    icon: Icons.people_outline,             selectedIcon: Icons.people,                path: '/customers'),
-        _NavItem(label: 'Procurement',  icon: Icons.local_shipping_outlined,    selectedIcon: Icons.local_shipping,        path: '/procurement'),
+        _NavItem(label: t('nav.inventory'),    icon: Icons.warehouse_outlined,         selectedIcon: Icons.warehouse,             path: '/inventory'),
+        _NavItem(label: t('nav.customers'),    icon: Icons.people_outline,             selectedIcon: Icons.people,                path: '/customers'),
+        _NavItem(label: t('nav.procurement'),  icon: Icons.local_shipping_outlined,    selectedIcon: Icons.local_shipping,        path: '/procurement'),
         _NavItem(label: 'Suppliers',    icon: Icons.business_center_outlined,   selectedIcon: Icons.business_center,       path: '/suppliers'),
-        _NavItem(label: 'Analytics',    icon: Icons.bar_chart_rounded,          selectedIcon: Icons.bar_chart_rounded,     path: '/analytics'),
+        _NavItem(label: t('nav.analytics'),    icon: Icons.bar_chart_rounded,          selectedIcon: Icons.bar_chart_rounded,     path: '/analytics'),
         _NavItem(label: 'Users',        icon: Icons.manage_accounts_outlined,   selectedIcon: Icons.manage_accounts,       path: '/users'),
-        _NavItem(label: 'Subscription', icon: Icons.card_membership_outlined,   selectedIcon: Icons.card_membership,       path: '/subscription'),
-        _NavItem(label: 'Notifications',icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,         path: '/notifications'),
-        _NavItem(label: 'Settings',     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,              path: '/settings'),
+        _NavItem(label: t('nav.subscription'), icon: Icons.card_membership_outlined,   selectedIcon: Icons.card_membership,       path: '/subscription'),
+        _NavItem(label: t('nav.notifications'),icon: Icons.notifications_outlined,     selectedIcon: Icons.notifications,         path: '/notifications'),
+        _NavItem(label: t('nav.settings'),     icon: Icons.settings_outlined,          selectedIcon: Icons.settings,              path: '/settings'),
       ];
   }
 }

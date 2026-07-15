@@ -1,76 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
+import '../../../core/utils/datetime_formatter.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../models/tenant_settings_model.dart';
 
-class PreferencesScreen extends StatefulWidget {
+class PreferencesScreen extends ConsumerStatefulWidget {
   const PreferencesScreen({super.key});
 
   @override
-  State<PreferencesScreen> createState() => _PreferencesScreenState();
+  ConsumerState<PreferencesScreen> createState() => _PreferencesScreenState();
 }
 
-class _PreferencesScreenState extends State<PreferencesScreen> {
+class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   static const _prefsKey = 'user_preferences';
 
-  bool _loading = true;
+  bool _localLoading = true;
   bool _saving = false;
+  bool _initializedFromTenant = false;
 
-  final _currencySymbolCtrl = TextEditingController(text: 'MMK');
-  String _numberFormat = '1,000'; // '1,000' or '1.000'
-  int _decimalPlaces = 0; // 0 or 2
-  String _dateFormat = 'DD/MM/YYYY'; // 'DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'
-  String _defaultPayment = 'CASH'; // 'CASH' or 'CARD'
+  // Genuinely device/user-local — matches how web keeps time-format
+  // client-only (usePreferencesStore) rather than syncing it tenant-wide.
+  String _dateFormat = 'DD/MM/YYYY';
+  bool _use24HourTime = false;
+
+  // Tenant-wide — synced through TenantSettingsModel/extra_settings so they
+  // match web's Preferences page exactly (same two fields, same keys).
+  String _defaultPayment = 'CASH';
   bool _autoPrintReceipt = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadLocal();
   }
 
-  @override
-  void dispose() {
-    _currencySymbolCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
+  Future<void> _loadLocal() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _currencySymbolCtrl.text =
-          prefs.getString('${_prefsKey}_currency_symbol') ?? 'MMK';
-      _numberFormat =
-          prefs.getString('${_prefsKey}_number_format') ?? '1,000';
-      _decimalPlaces =
-          prefs.getInt('${_prefsKey}_decimal_places') ?? 0;
-      _dateFormat =
-          prefs.getString('${_prefsKey}_date_format') ?? 'DD/MM/YYYY';
-      _defaultPayment = prefs.getString('${_prefsKey}_default_payment') ?? 'CASH';
-      _autoPrintReceipt = prefs.getBool('${_prefsKey}_auto_print_receipt') ?? false;
+      _dateFormat = prefs.getString('${_prefsKey}_date_format') ?? 'DD/MM/YYYY';
+      _use24HourTime = prefs.getBool('${_prefsKey}_use_24h') ?? false;
     } catch (_) {
       // Use defaults
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _localLoading = false);
     }
+  }
+
+  Future<void> _saveLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('${_prefsKey}_date_format', _dateFormat);
+    await prefs.setBool('${_prefsKey}_use_24h', _use24HourTime);
+    DateTimeFormatter.configure(dateFormat: _dateFormat, use24Hour: _use24HourTime);
+  }
+
+  void _hydrateFromTenant(TenantSettingsModel settings) {
+    if (_initializedFromTenant) return;
+    _initializedFromTenant = true;
+    _defaultPayment = settings.defaultPaymentMethod;
+    _autoPrintReceipt = settings.autoPrintReceipt;
   }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('${_prefsKey}_currency_symbol',
-          _currencySymbolCtrl.text.trim().isEmpty
-              ? 'MMK'
-              : _currencySymbolCtrl.text.trim());
-      await prefs.setString(
-          '${_prefsKey}_number_format', _numberFormat);
-      await prefs.setInt(
-          '${_prefsKey}_decimal_places', _decimalPlaces);
-      await prefs.setString('${_prefsKey}_date_format', _dateFormat);
-      await prefs.setString('${_prefsKey}_default_payment', _defaultPayment);
-      await prefs.setBool('${_prefsKey}_auto_print_receipt', _autoPrintReceipt);
-
+      await _saveLocal();
+      await ref.read(tenantSettingsProvider.notifier).updateCheckoutPreferences(
+            autoPrintReceipt: _autoPrintReceipt,
+            defaultPaymentMethod: _defaultPayment,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -82,10 +82,7 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppColors.error,
-          ),
+          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -95,6 +92,13 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tenantAsync = ref.watch(tenantSettingsProvider);
+    tenantAsync.whenData((s) {
+      if (s != null) _hydrateFromTenant(s);
+    });
+    final tenantSettings = tenantAsync.valueOrNull;
+    final loading = _localLoading || (tenantAsync.isLoading && !_initializedFromTenant);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -103,167 +107,115 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
             style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
-      body: _loading
+      body: loading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
           : ContentWrapper(
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Currency display
-                  _sectionHeader('CURRENCY DISPLAY'),
+                  // Currency — tenant-wide, so it can't drift device-to-device
+                  // or from what's printed on receipts / shown on web.
+                  _sectionHeader('CURRENCY'),
                   const SizedBox(height: 8),
                   _card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          controller: _currencySymbolCtrl,
-                          style: const TextStyle(
-                              color: AppColors.textPrimary),
-                          decoration: _inputDecoration(
-                            label: 'Currency Symbol',
-                            hint: 'e.g. MMK, USD, THB',
-                            prefixIcon: Icons.currency_exchange,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Number Format',
-                          style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        RadioGroup<String>(
-                          groupValue: _numberFormat,
-                          onChanged: (v) =>
-                              setState(() => _numberFormat = v!),
-                          child: Column(
-                            children: [
-                              RadioListTile<String>(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                title: const Text('1,000 (comma separator)',
-                                    style: TextStyle(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 13)),
-                                value: '1,000',
-                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                              ),
-                              RadioListTile<String>(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                title: const Text('1.000 (period separator)',
-                                    style: TextStyle(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 13)),
-                                value: '1.000',
-                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(color: AppColors.divider, height: 16),
-                        const Text(
-                          'Decimal Places',
-                          style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        RadioGroup<int>(
-                          groupValue: _decimalPlaces,
-                          onChanged: (v) =>
-                              setState(() => _decimalPlaces = v!),
-                          child: Column(
-                            children: [
-                              RadioListTile<int>(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                title: const Text('0 (e.g. 1,500)',
-                                    style: TextStyle(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 13)),
-                                value: 0,
-                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                              ),
-                              RadioListTile<int>(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                title: const Text('2 (e.g. 1,500.00)',
-                                    style: TextStyle(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 13)),
-                                value: 2,
-                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.currency_exchange,
+                          color: AppColors.primary),
+                      title: Text(
+                        '${tenantSettings?.displayCurrency ?? 'Kyats'} (${tenantSettings?.currency ?? 'MMK'})',
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'Set for the whole business in Business Settings',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12),
+                      ),
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  // Date format
-                  _sectionHeader('DATE FORMAT'),
+                  // Date/time display — device-local, like web's time-format setting
+                  _sectionHeader('DATE & TIME DISPLAY'),
                   const SizedBox(height: 8),
                   _card(
-                    child: RadioGroup<String>(
-                      groupValue: _dateFormat,
-                      onChanged: (v) => setState(() => _dateFormat = v!),
-                      child: Column(
-                        children: [
-                          RadioListTile<String>(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('DD/MM/YYYY',
-                                style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500)),
-                            subtitle: const Text('e.g. 25/06/2026',
-                                style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12)),
-                            value: 'DD/MM/YYYY',
-                            fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
+                    child: Column(
+                      children: [
+                        RadioGroup<String>(
+                          groupValue: _dateFormat,
+                          onChanged: (v) => setState(() => _dateFormat = v!),
+                          child: Column(
+                            children: [
+                              RadioListTile<String>(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('DD/MM/YYYY',
+                                    style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
+                                subtitle: const Text('e.g. 25/06/2026',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12)),
+                                value: 'DD/MM/YYYY',
+                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
+                              ),
+                              Divider(height: 1, color: AppColors.divider),
+                              RadioListTile<String>(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('MM/DD/YYYY',
+                                    style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
+                                subtitle: const Text('e.g. 06/25/2026',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12)),
+                                value: 'MM/DD/YYYY',
+                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
+                              ),
+                              Divider(height: 1, color: AppColors.divider),
+                              RadioListTile<String>(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('YYYY-MM-DD',
+                                    style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
+                                subtitle: const Text('e.g. 2026-06-25',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12)),
+                                value: 'YYYY-MM-DD',
+                                fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
+                              ),
+                            ],
                           ),
-                          Divider(height: 1, color: AppColors.divider),
-                          RadioListTile<String>(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('MM/DD/YYYY',
-                                style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500)),
-                            subtitle: const Text('e.g. 06/25/2026',
-                                style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12)),
-                            value: 'MM/DD/YYYY',
-                            fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                          ),
-                          Divider(height: 1, color: AppColors.divider),
-                          RadioListTile<String>(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('YYYY-MM-DD',
-                                style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500)),
-                            subtitle: const Text('e.g. 2026-06-25',
-                                style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12)),
-                            value: 'YYYY-MM-DD',
-                            fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const Divider(color: AppColors.divider, height: 1),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('24-Hour Time',
+                              style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500)),
+                          subtitle: Text(
+                              _use24HourTime ? 'e.g. 14:30' : 'e.g. 2:30 PM',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 12)),
+                          value: _use24HourTime,
+                          onChanged: (v) => setState(() => _use24HourTime = v),
+                          activeThumbColor: AppColors.primary,
+                          activeTrackColor: AppColors.primary.withValues(alpha: 0.3),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -421,27 +373,4 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         clipBehavior: Clip.hardEdge,
         child: child,
       );
-
-  InputDecoration _inputDecoration({
-    required String label,
-    String? hint,
-    required IconData prefixIcon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.textDisabled),
-      prefixIcon:
-          Icon(prefixIcon, color: AppColors.textSecondary, size: 20),
-      labelStyle: const TextStyle(color: AppColors.textSecondary),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.divider),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.primary),
-      ),
-    );
-  }
 }

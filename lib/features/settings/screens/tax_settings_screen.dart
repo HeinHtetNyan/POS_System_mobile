@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/api/api_client.dart';
-import '../../../core/api/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../models/tenant_settings_model.dart';
 
 class TaxSettingsScreen extends ConsumerStatefulWidget {
   const TaxSettingsScreen({super.key});
@@ -15,21 +13,13 @@ class TaxSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _TaxSettingsScreenState extends ConsumerState<TaxSettingsScreen> {
-  static const _prefsKey = 'tax_settings';
-
-  bool _loading = true;
   bool _saving = false;
+  bool _initialized = false;
 
   bool _taxEnabled = false;
   final _rateCtrl = TextEditingController(text: '0');
   final _nameCtrl = TextEditingController(text: 'Tax');
   String _taxType = 'exclusive'; // 'inclusive' or 'exclusive'
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
 
   @override
   void dispose() {
@@ -38,39 +28,16 @@ class _TaxSettingsScreenState extends ConsumerState<TaxSettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _taxEnabled = prefs.getBool('${_prefsKey}_enabled') ?? false;
-      _rateCtrl.text =
-          (prefs.getDouble('${_prefsKey}_rate') ?? 0.0).toString();
-      _nameCtrl.text = prefs.getString('${_prefsKey}_name') ?? 'Tax';
-      _taxType = prefs.getString('${_prefsKey}_type') ?? 'exclusive';
-
-      // Also fetch from server and override local values
-      final tenantId = ref.read(currentUserProvider)?.tenantId ?? '';
-      if (tenantId.isNotEmpty) {
-        try {
-          final res = await apiClient.dio
-              .get(ApiEndpoints.tenantSettings(tenantId));
-          final data = res.data as Map<String, dynamic>? ?? {};
-          final serverRate = data['tax_rate'];
-          if (serverRate != null) {
-            _rateCtrl.text = serverRate.toString();
-          }
-          final serverInclusive = data['tax_inclusive'] as bool?;
-          if (serverInclusive != null) {
-            _taxType = serverInclusive ? 'inclusive' : 'exclusive';
-          }
-        } catch (_) {
-          // Fall back to local prefs
-        }
-      }
-    } catch (_) {
-      // Use defaults
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  // Tenant Settings is the single source of truth (same as web) — this
+  // screen no longer keeps its own local shared_preferences copy, so a
+  // change here (or on web) is reflected everywhere immediately on refresh.
+  void _hydrateFromSettings(TenantSettingsModel settings) {
+    if (_initialized) return;
+    _initialized = true;
+    _taxEnabled = settings.taxEnabled;
+    _rateCtrl.text = (settings.taxRate ?? 0.0).toString();
+    _nameCtrl.text = settings.taxName;
+    _taxType = settings.taxInclusive ? 'inclusive' : 'exclusive';
   }
 
   Future<void> _save() async {
@@ -87,28 +54,12 @@ class _TaxSettingsScreenState extends ConsumerState<TaxSettingsScreen> {
 
     setState(() => _saving = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('${_prefsKey}_enabled', _taxEnabled);
-      await prefs.setDouble('${_prefsKey}_rate', rate ?? 0.0);
-      await prefs.setString('${_prefsKey}_name', _nameCtrl.text.trim());
-      await prefs.setString('${_prefsKey}_type', _taxType);
-
-      // Also persist to server
-      final tenantId = ref.read(currentUserProvider)?.tenantId ?? '';
-      if (tenantId.isNotEmpty) {
-        try {
-          await apiClient.dio.patch(
-            ApiEndpoints.tenantSettings(tenantId),
-            data: {
-              'tax_rate': rate ?? 0.0,
-              'tax_inclusive': _taxType == 'inclusive',
-            },
+      await ref.read(tenantSettingsProvider.notifier).updateTax(
+            enabled: _taxEnabled,
+            rate: rate ?? 0.0,
+            inclusive: _taxType == 'inclusive',
+            name: _nameCtrl.text.trim(),
           );
-        } catch (_) {
-          // Best-effort: ignore server errors, local save succeeded
-        }
-      }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -133,6 +84,12 @@ class _TaxSettingsScreenState extends ConsumerState<TaxSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsAsync = ref.watch(tenantSettingsProvider);
+    final loading = settingsAsync.isLoading && !_initialized;
+    settingsAsync.whenData((s) {
+      if (s != null) _hydrateFromSettings(s);
+    });
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -141,7 +98,7 @@ class _TaxSettingsScreenState extends ConsumerState<TaxSettingsScreen> {
             style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
-      body: _loading
+      body: loading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
           : ContentWrapper(

@@ -11,11 +11,13 @@ import '../widgets/payment_dialog.dart';
 import '../../cashier_session/providers/session_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/connectivity_provider.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
 import '../../../core/hardware/scanner_service.dart';
 import '../../../core/storage/offline_queue.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../models/order_model.dart';
+import '../../../models/tenant_settings_model.dart';
 
 class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
@@ -29,11 +31,46 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   StreamSubscription<String>? _scannerSub;
   double _currentWidth = 9999; // cached; updated each build for use in callbacks
 
+  // Super-admin-configurable toggles (set per business) and tenant Tax
+  // Settings are read live from the shared tenantSettingsProvider (see
+  // build()) instead of a separate ad-hoc fetch, so POS, receipts, and the
+  // Settings screens all read the exact same values.
+  TenantSettingsModel? get _tenantSettings =>
+      ref.read(tenantSettingsProvider).valueOrNull;
+  bool get _settingsLoading =>
+      ref.read(tenantSettingsProvider).isLoading && _tenantSettings == null;
+  bool get _smallScreenCheckoutEnabled =>
+      _tenantSettings?.featuresEnabled['pos_small_screen_checkout'] ?? false;
+  bool get _cameraScannerEnabled =>
+      _tenantSettings?.featuresEnabled['pos_camera_scanner'] ?? true;
+
+  bool get _checkoutBlocked =>
+      _currentWidth < 700 && !_smallScreenCheckoutEnabled;
+
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleHwKey);
     _scannerSub = scannerService.barcodeStream.listen(_onBarcode);
+  }
+
+  // Guards against re-applying (and rebuilding the cart's item list) every
+  // single frame this screen rebuilds — only acts when the tenant's rate or
+  // inclusive/exclusive mode actually changed since last applied.
+  double? _appliedTaxRate;
+  bool? _appliedTaxInclusive;
+
+  void _applyTax(
+    TenantSettingsModel settings,
+    ({String branchId, String sessionId}) cartParams,
+  ) {
+    final rate = settings.taxEnabled ? settings.taxRate! / 100 : 0.0;
+    final inclusive = settings.taxInclusive;
+    if (_appliedTaxRate == rate && _appliedTaxInclusive == inclusive) return;
+    _appliedTaxRate = rate;
+    _appliedTaxInclusive = inclusive;
+    ref.read(posCartProvider(cartParams).notifier)
+        .configureTax(taxRate: rate, taxInclusive: inclusive);
   }
 
   @override
@@ -44,13 +81,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   bool _handleHwKey(KeyEvent event) {
-    if (_currentWidth < 700) return false; // POS blocked on narrow screens
+    if (_checkoutBlocked) return false; // POS blocked on narrow screens
     scannerService.handleKeyEvent(event);
     return false;
   }
 
   void _onBarcode(String barcode) {
-    if (!mounted || _currentWidth < 700) return; // POS blocked on narrow screens
+    if (!mounted || _checkoutBlocked) return; // POS blocked on narrow screens
     final user = ref.read(authProvider).user;
     final session = ref.read(sessionProvider).session;
     if (user == null || session == null) return;
@@ -112,6 +149,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final user = ref.watch(authProvider).user;
     final session = ref.watch(sessionProvider).session;
     final isOnline = ref.watch(isOnlineProvider);
+    // Establishes the reactive dependency so this screen rebuilds when tenant
+    // settings load/change; the actual values are read via the getters above.
+    ref.watch(tenantSettingsProvider);
 
     if (user == null || session == null) {
       return const Scaffold(
@@ -120,8 +160,18 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       );
     }
 
-    // Gate: POS checkout requires tablet (≥700dp). Small phones are not supported.
-    if (_currentWidth < 700) {
+    // Wait for the small-screen-checkout toggle to load before deciding whether to
+    // block — avoids a flash of the "blocked" screen for tenants who enabled it.
+    if (_currentWidth < 700 && _settingsLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
+    // Gate: POS checkout requires tablet (≥700dp) by default — admin-configurable
+    // in Settings → Preferences ("Allow Checkout on Small Screens").
+    if (_checkoutBlocked) {
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(title: const Text('Point of Sale')),
@@ -163,6 +213,20 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final cartParams = (branchId: branchId, sessionId: session.id);
     final cartState = ref.watch(posCartProvider(cartParams));
 
+    // Apply the tenant's Tax Settings to the cart as soon as they're
+    // available, and again whenever they change (e.g. an owner toggles tax
+    // on/off mid-shift) — re-prices any items already in the cart.
+    final tenantSettingsNow = ref.read(tenantSettingsProvider).valueOrNull;
+    if (tenantSettingsNow != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _applyTax(tenantSettingsNow, cartParams));
+    }
+    ref.listen<AsyncValue<TenantSettingsModel?>>(tenantSettingsProvider,
+        (prev, next) {
+      final settings = next.valueOrNull;
+      if (settings != null) _applyTax(settings, cartParams);
+    });
+
     // Auto-sync queued offline orders when connectivity is restored
     ref.listen<bool>(isOnlineProvider, (prev, next) {
       if (prev == false && next == true) {
@@ -193,15 +257,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         backgroundColor: AppColors.background,
         title: const Text('Point of Sale'),
         actions: [
-          // Camera scanner button — amber icon
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.qr_code_scanner_outlined,
-                  color: AppColors.primary),
-              tooltip: 'Scan barcode',
-              onPressed: () => _openCameraScanner(ctx),
+          // Camera scanner button — amber icon; admin-configurable in Settings → Preferences
+          if (_cameraScannerEnabled)
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.qr_code_scanner_outlined,
+                    color: AppColors.primary),
+                tooltip: 'Scan barcode',
+                onPressed: () => _openCameraScanner(ctx),
+              ),
             ),
-          ),
           // Offline indicator — amber warning badge
           if (!isOnline)
             Container(
@@ -467,12 +532,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   ) {
     final hasCustomer =
         ref.read(posCartProvider(cartParams)).customer != null;
+    final defaultMethod =
+        _tenantSettings?.defaultPaymentMethod ?? PaymentMethod.cash;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => PaymentDialog(
         totalAmount: total,
         hasCustomer: hasCustomer,
+        defaultMethod: defaultMethod,
         onConfirm: (payments) {
           Navigator.pop(context);
           ref

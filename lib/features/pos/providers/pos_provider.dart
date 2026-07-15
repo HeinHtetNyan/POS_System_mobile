@@ -47,7 +47,23 @@ class PosCartState {
     return orderDiscountValue.clamp(0, subtotal - lineDiscountTotal);
   }
   double get discountTotal => lineDiscountTotal + orderDiscountAmount;
-  double get total => subtotal + taxTotal - discountTotal;
+  // Summed from each line's own gross total rather than subtotal+tax-discount:
+  // for tax-inclusive items, lineTotal already excludes double-adding tax
+  // (see LocalCartItem.lineTotal), matching the web app's useCartTotals().
+  double get total =>
+      (items.fold(0.0, (sum, i) => sum + i.lineTotal) - discountTotal)
+          .clamp(0, double.infinity);
+
+  // All items share the same tenant-wide rate (see PosCartNotifier.configureTax).
+  bool get _cartTaxInclusive => items.isNotEmpty && items.first.taxInclusive;
+  double get _cartTaxRate => items.isNotEmpty ? items.first.taxRate : 0;
+
+  // Order-level discount converted onto the same net (pre-tax) basis as each
+  // item's netUnitPrice/netDiscountAmount, so the backend isn't discounting a
+  // net subtotal by a gross-priced amount — mirrors web's PaymentOverlay.
+  double get orderDiscountAmountNet => _cartTaxInclusive
+      ? orderDiscountAmount / (1 + _cartTaxRate)
+      : orderDiscountAmount;
   int get itemCount =>
       items.fold(0, (sum, i) => sum + i.quantity);
   bool get isEmpty => items.isEmpty;
@@ -93,8 +109,63 @@ class PosCartNotifier extends StateNotifier<PosCartState> {
   final String _branchId;
   final String _sessionId;
 
+  // Tenant-wide Tax Settings (uniform rate applied to the whole cart) — the
+  // same source and formula the web app's useCartTotals() uses. Deliberately
+  // NOT product.taxRate: that field is a per-product percentage the checkout
+  // flow never applied, and its units don't even match what the cart/order
+  // API expects (a 0-1 fraction), so it silently produced ~0 tax.
+  double _taxRate = 0; // fraction 0-1
+  bool _taxInclusive = false;
+
+  // Generated once per checkout attempt and reused for every retry (the
+  // initial network-dropped attempt and any offline sync-queue replay), so
+  // the backend recognizes a resubmission and returns the original order
+  // instead of creating a duplicate — same idea as web's PaymentOverlay.
+  String? _idempotencyKey;
+
+  String _generateIdempotencyKey() {
+    final rand = (DateTime.now().microsecondsSinceEpoch % 1000000).toString();
+    return 'chk-${DateTime.now().millisecondsSinceEpoch}-$rand';
+  }
+
+  List<CheckoutItemPayload> _buildCheckoutItems() => state.items
+      .map((i) => CheckoutItemPayload(
+            productId: i.productId,
+            variantId: i.variantId,
+            quantity: i.quantity,
+            unitPrice: i.netUnitPrice,
+            discountAmount: i.netDiscountAmount,
+            taxRate: i.taxRate,
+          ))
+      .toList();
+
   PosCartNotifier(this._repo, this._branchId, this._sessionId)
       : super(const PosCartState());
+
+  // Called whenever tenant settings load/change (see PosScreen). Re-prices
+  // any items already in the cart so an in-progress sale reflects the
+  // current rate instead of whatever was active when each item was added.
+  void configureTax({required double taxRate, required bool taxInclusive}) {
+    _taxRate = taxRate;
+    _taxInclusive = taxInclusive;
+    if (state.items.isEmpty) return;
+    final updated = state.items
+        .map((i) => LocalCartItem(
+              productId: i.productId,
+              productName: i.productName,
+              variantId: i.variantId,
+              variantName: i.variantName,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              discountAmount: i.discountAmount,
+              taxRate: _taxRate,
+              taxInclusive: _taxInclusive,
+              sku: i.sku,
+              barcode: i.barcode,
+            ))
+        .toList();
+    state = state.copyWith(items: updated);
+  }
 
   void addItem(ProductModel product, {ProductVariantModel? variant}) {
     final key = variant?.id ?? product.id;
@@ -114,7 +185,8 @@ class PosCartNotifier extends StateNotifier<PosCartState> {
         quantity: 1,
         unitPrice: variant?.sellingPrice ?? product.sellingPrice,
         discountAmount: 0,
-        taxRate: product.taxRate,
+        taxRate: _taxRate,
+        taxInclusive: _taxInclusive,
         sku: variant?.sku ?? product.sku,
         barcode: variant?.barcode ?? product.barcode,
       );
@@ -178,53 +250,29 @@ class PosCartNotifier extends StateNotifier<PosCartState> {
 
   void clearCart() {
     state = const PosCartState();
+    _idempotencyKey = null;
   }
 
-  // Build the server-side cart and process checkout in a single flow
+  // Single transactional checkout call — POST /sales/checkout takes the
+  // cart's line items directly (see PosRepository.checkout for why: it's
+  // an all-or-nothing transaction, not a cart_id reference).
   Future<OrderModel?> checkout(
       List<CheckoutPayment> payments) async {
     if (state.items.isEmpty) return null;
 
     state = state.copyWith(isCheckingOut: true, clearError: true);
     try {
-      // Step 1: Create cart on server
-      final serverCart = await _repo.createCart(
-        branchId: _branchId,
-        cashierSessionId: _sessionId,
-        customerId: state.customer?.id,
-      );
-
-      // Step 2: Add all items (clean up orphaned cart on failure)
-      try {
-        for (final item in state.items) {
-          await _repo.addToCart(
-            cartId: serverCart.id,
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discountAmount: item.discountAmount,
-            taxRate: item.taxRate,
-          );
-        }
-      } catch (e) {
-        await _repo.deleteCart(serverCart.id);
-        rethrow;
-      }
-
-      // Step 3: Checkout
       final order = await _repo.checkout(
-        branchId: _branchId,
         cashierSessionId: _sessionId,
-        cartId: serverCart.id,
+        items: _buildCheckoutItems(),
         payments: payments,
         customerId: state.customer?.id,
-        orderDiscountType: state.orderDiscountType,
-        orderDiscountValue:
-            state.orderDiscountValue > 0 ? state.orderDiscountValue : null,
+        discountAmount: state.orderDiscountAmountNet,
+        idempotencyKey: _idempotencyKey ??= _generateIdempotencyKey(),
       );
 
       state = PosCartState(lastCompletedOrder: order);
+      _idempotencyKey = null;
       return order;
     } catch (e) {
       // Network error (no HTTP status code) → save locally for offline sync
@@ -236,6 +284,8 @@ class PosCartNotifier extends StateNotifier<PosCartState> {
           customerId: state.customer?.id,
           items: state.items,
           payments: payments,
+          discountAmount: state.orderDiscountAmountNet,
+          idempotencyKey: _idempotencyKey ??= _generateIdempotencyKey(),
         );
         final pending = offlineQueueService.pendingCount.value;
         state = state.copyWith(

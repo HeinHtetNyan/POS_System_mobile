@@ -1,47 +1,40 @@
-// ignore_for_file: depend_on_referenced_packages
-import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/tenant_settings_provider.dart';
+import '../../../core/providers/receipt_options_provider.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../models/tenant_settings_model.dart';
 
-class ReceiptSettingsScreen extends StatefulWidget {
+class ReceiptSettingsScreen extends ConsumerStatefulWidget {
   const ReceiptSettingsScreen({super.key});
 
   @override
-  State<ReceiptSettingsScreen> createState() =>
+  ConsumerState<ReceiptSettingsScreen> createState() =>
       _ReceiptSettingsScreenState();
 }
 
-class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
-  static const _prefsKey = 'receipt_settings';
-
-  bool _loading = true;
+class _ReceiptSettingsScreenState extends ConsumerState<ReceiptSettingsScreen> {
   bool _saving = false;
+  bool _initialized = false;
 
   final _headerCtrl = TextEditingController();
   final _footerCtrl = TextEditingController();
+  bool _showTaxOnReceipt = true;
 
-  String? _logoPath;
-  bool _showLogo = true;
-  bool _showOrderNumber = true;
-  bool _showCashierName = true;
-  bool _showBarcode = false;
-  bool _showItemTax = false;
-  bool _showCostPrice = false;
-  bool _showMargin = false;
-  String _paperSize = '80mm';
-  String _fontSize = 'medium';
+  File? _pendingLogo; // picked but not yet uploaded
+  bool _logoBusy = false;
+  Uint8List? _logoBytes;
 
   @override
   void initState() {
     super.initState();
     _headerCtrl.addListener(() => setState(() {}));
     _footerCtrl.addListener(() => setState(() {}));
-    _load();
   }
 
   @override
@@ -51,52 +44,85 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  void _hydrateFromSettings(TenantSettingsModel settings) {
+    if (_initialized) return;
+    _initialized = true;
+    _headerCtrl.text = settings.receiptHeader ?? '';
+    _footerCtrl.text = settings.receiptFooter ?? '';
+    _showTaxOnReceipt = settings.showTaxOnReceipt;
+    if (settings.hasLogo) _loadLogoBytes();
+  }
+
+  Future<void> _loadLogoBytes() async {
+    final tenantId = ref.read(tenantSettingsProvider).valueOrNull?.tenantId;
+    if (tenantId == null) return;
+    final bytes =
+        await ref.read(tenantSettingsRepositoryProvider).fetchLogoBytes(tenantId);
+    if (mounted && bytes != null) {
+      setState(() => _logoBytes = Uint8List.fromList(bytes));
+    }
+  }
+
+  Future<void> _pickLogo() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    setState(() {
+      _pendingLogo = File(picked.path);
+      _logoBusy = true;
+    });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw != null) {
-        final map = jsonDecode(raw) as Map<String, dynamic>;
-        _headerCtrl.text = map['header'] as String? ?? '';
-        _footerCtrl.text = map['footer'] as String? ?? '';
-        _logoPath = map['logo_path'] as String?;
-        _showLogo = map['show_logo'] as bool? ?? true;
-        _showOrderNumber = map['show_order_number'] as bool? ?? true;
-        _showCashierName = map['show_cashier_name'] as bool? ?? true;
-        _showBarcode = map['show_barcode'] as bool? ?? false;
-        _showItemTax = map['show_item_tax'] as bool? ?? false;
-        _showCostPrice = map['show_cost_price'] as bool? ?? false;
-        _showMargin = map['show_margin'] as bool? ?? false;
-        _paperSize = map['paper_size'] as String? ?? '80mm';
-        _fontSize = map['font_size'] as String? ?? 'medium';
+      await ref.read(tenantSettingsProvider.notifier).uploadLogo(_pendingLogo!);
+      await _loadLogoBytes();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Logo uploaded'),
+          backgroundColor: AppColors.success,
+        ));
       }
-    } catch (_) {
-      // Use defaults
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Upload failed: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _logoBusy = false);
+    }
+  }
+
+  Future<void> _removeLogo() async {
+    setState(() => _logoBusy = true);
+    try {
+      await ref.read(tenantSettingsProvider.notifier).deleteLogo();
+      setState(() {
+        _logoBytes = null;
+        _pendingLogo = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Remove failed: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _logoBusy = false);
     }
   }
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final map = {
-        'header': _headerCtrl.text,
-        'footer': _footerCtrl.text,
-        'logo_path': _logoPath,
-        'show_logo': _showLogo,
-        'show_order_number': _showOrderNumber,
-        'show_cashier_name': _showCashierName,
-        'show_barcode': _showBarcode,
-        'show_item_tax': _showItemTax,
-        'show_cost_price': _showCostPrice,
-        'show_margin': _showMargin,
-        'paper_size': _paperSize,
-        'font_size': _fontSize,
-      };
-      await prefs.setString(_prefsKey, jsonEncode(map));
-
+      await ref.read(tenantSettingsProvider.notifier).updateReceiptContent(
+            header: _headerCtrl.text.trim(),
+            footer: _footerCtrl.text.trim(),
+            showTaxOnReceipt: _showTaxOnReceipt,
+          );
+      // Display/hardware options are device-local (paper size, which toggles
+      // to print) — saved separately, instantly, per toggle below.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -108,10 +134,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppColors.error,
-          ),
+          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -119,22 +142,16 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     }
   }
 
-  Future<void> _pickLogo() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-    setState(() => _logoPath = picked.path);
-  }
-
-  void _removeLogo() {
-    setState(() => _logoPath = null);
-  }
-
   @override
   Widget build(BuildContext context) {
+    final settingsAsync = ref.watch(tenantSettingsProvider);
+    final loading = settingsAsync.isLoading && !_initialized;
+    settingsAsync.whenData((s) {
+      if (s != null) _hydrateFromSettings(s);
+    });
+    final options = ref.watch(receiptOptionsProvider);
+    final optionsNotifier = ref.read(receiptOptionsProvider.notifier);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -143,7 +160,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
             style: TextStyle(color: AppColors.textPrimary)),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
-      body: _loading
+      body: loading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
           : ContentWrapper(
@@ -151,6 +168,11 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _sectionHeader('RECEIPT CONTENT'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Synced across all devices and the web dashboard.',
+                    style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
+                  ),
                   const SizedBox(height: 8),
                   _card(
                     child: Column(
@@ -166,6 +188,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           label: 'Footer Text',
                           hint: 'e.g. Returns accepted within 7 days.',
                         ),
+                        const SizedBox(height: 8),
+                        _toggle(
+                          title: 'Show Tax on Receipt',
+                          subtitle: 'Print the tax line above the total',
+                          value: _showTaxOnReceipt,
+                          onChanged: (v) => setState(() => _showTaxOnReceipt = v),
+                        ),
                       ],
                     ),
                   ),
@@ -178,15 +207,23 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_logoPath != null &&
-                            File(_logoPath!).existsSync()) ...[
+                        if (_pendingLogo != null) ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(_logoPath!),
-                              height: 80,
-                              fit: BoxFit.contain,
+                            child: Image.file(_pendingLogo!,
+                                height: 80, fit: BoxFit.contain),
+                          ),
+                          const SizedBox(height: 10),
+                        ] else if (_logoBytes != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: Image.memory(_logoBytes!,
+                                height: 64, fit: BoxFit.contain),
                           ),
                           const SizedBox(height: 10),
                         ] else ...[
@@ -196,23 +233,18 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                             decoration: BoxDecoration(
                               color: AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: AppColors.divider,
-                                  style: BorderStyle.solid),
+                              border: Border.all(color: AppColors.divider),
                             ),
                             child: const Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.image_outlined,
-                                    color: AppColors.textDisabled,
-                                    size: 28),
+                                    color: AppColors.textDisabled, size: 28),
                                 SizedBox(height: 4),
-                                Text(
-                                  'No logo selected',
-                                  style: TextStyle(
-                                      color: AppColors.textDisabled,
-                                      fontSize: 12),
-                                ),
+                                Text('No logo uploaded',
+                                    style: TextStyle(
+                                        color: AppColors.textDisabled,
+                                        fontSize: 12)),
                               ],
                             ),
                           ),
@@ -224,42 +256,42 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.primary,
-                                  side: const BorderSide(
-                                      color: AppColors.primary),
+                                  side: const BorderSide(color: AppColors.primary),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(8)),
+                                      borderRadius: BorderRadius.circular(8)),
                                 ),
                                 icon: const Icon(Icons.photo_library_outlined,
                                     size: 16),
-                                label: const Text('Choose from Gallery',
-                                    style: TextStyle(fontSize: 13)),
-                                onPressed: _pickLogo,
+                                label: Text(
+                                    _logoBytes != null ? 'Replace' : 'Choose from Gallery',
+                                    style: const TextStyle(fontSize: 13)),
+                                onPressed: _logoBusy ? null : _pickLogo,
                               ),
                             ),
-                            if (_logoPath != null) ...[
+                            if (_logoBytes != null) ...[
                               const SizedBox(width: 8),
                               OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.error,
-                                  side: const BorderSide(
-                                      color: AppColors.error),
+                                  side: const BorderSide(color: AppColors.error),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(8)),
+                                      borderRadius: BorderRadius.circular(8)),
                                 ),
-                                onPressed: _removeLogo,
-                                child: const Text('Remove',
-                                    style: TextStyle(fontSize: 13)),
+                                onPressed: _logoBusy ? null : _removeLogo,
+                                child: _logoBusy
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2))
+                                    : const Text('Remove', style: TextStyle(fontSize: 13)),
                               ),
                             ],
                           ],
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Logo is stored locally on this device.',
-                          style: TextStyle(
-                              color: AppColors.textDisabled, fontSize: 11),
+                          'Uploaded to your business profile — used on receipts printed from any device.',
+                          style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
                         ),
                       ],
                     ),
@@ -267,7 +299,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
 
                   const SizedBox(height: 20),
 
-                  _sectionHeader('DISPLAY OPTIONS'),
+                  _sectionHeader('THIS DEVICE\'S PRINTER'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Paper size, font size, and which lines print — specific to the printer connected to this device.',
+                    style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
+                  ),
                   const SizedBox(height: 8),
                   _card(
                     child: Column(
@@ -275,56 +312,50 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         _toggle(
                           title: 'Show Logo',
                           subtitle: 'Print business logo at top',
-                          value: _showLogo,
-                          onChanged: (v) => setState(() => _showLogo = v),
+                          value: options.showLogo,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showLogo: v)),
                         ),
                         _divider(),
                         _toggle(
                           title: 'Show Order Number',
                           subtitle: 'Print order/receipt number',
-                          value: _showOrderNumber,
-                          onChanged: (v) =>
-                              setState(() => _showOrderNumber = v),
+                          value: options.showOrderNumber,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showOrderNumber: v)),
                         ),
                         _divider(),
                         _toggle(
                           title: 'Show Cashier Name',
                           subtitle: 'Print name of cashier who processed sale',
-                          value: _showCashierName,
-                          onChanged: (v) =>
-                              setState(() => _showCashierName = v),
+                          value: options.showCashierName,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showCashierName: v)),
                         ),
                         _divider(),
                         _toggle(
                           title: 'Show Barcode',
-                          subtitle: 'Print barcode at bottom of receipt',
-                          value: _showBarcode,
-                          onChanged: (v) =>
-                              setState(() => _showBarcode = v),
+                          subtitle: 'Print a scannable barcode of the order number',
+                          value: options.showBarcode,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showBarcode: v)),
                         ),
                         _divider(),
                         _toggle(
-                          title: 'Show Tax on Items',
+                          title: 'Show Tax Per Item',
                           subtitle: 'Display tax amount per line item',
-                          value: _showItemTax,
-                          onChanged: (v) =>
-                              setState(() => _showItemTax = v),
+                          value: options.showItemTax,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showItemTax: v)),
                         ),
                         _divider(),
                         _toggle(
                           title: 'Show Cost Price',
                           subtitle: 'Print cost price alongside sale price',
-                          value: _showCostPrice,
-                          onChanged: (v) =>
-                              setState(() => _showCostPrice = v),
+                          value: options.showCostPrice,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showCostPrice: v)),
                         ),
                         _divider(),
                         _toggle(
                           title: 'Show Margin',
                           subtitle: 'Display profit margin per item',
-                          value: _showMargin,
-                          onChanged: (v) =>
-                              setState(() => _showMargin = v),
+                          value: options.showMargin,
+                          onChanged: (v) => optionsNotifier.update(options.copyWith(showMargin: v)),
                         ),
                       ],
                     ),
@@ -336,29 +367,15 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                   const SizedBox(height: 8),
                   _card(
                     child: RadioGroup<String>(
-                      groupValue: _paperSize,
-                      onChanged: (v) => setState(() => _paperSize = v!),
+                      groupValue: options.paperSize,
+                      onChanged: (v) => optionsNotifier.update(options.copyWith(paperSize: v)),
                       child: Column(
                         children: [
-                          _radioOption(
-                            title: '58mm',
-                            subtitle:
-                                'Narrow thermal paper (compact printer)',
-                            value: '58mm',
-                          ),
+                          _radioOption(title: '58mm', subtitle: 'Narrow thermal paper (compact printer)', value: '58mm'),
                           _divider(),
-                          _radioOption(
-                            title: '80mm',
-                            subtitle:
-                                'Standard thermal paper (most POS printers)',
-                            value: '80mm',
-                          ),
+                          _radioOption(title: '80mm', subtitle: 'Standard thermal paper (most POS printers)', value: '80mm'),
                           _divider(),
-                          _radioOption(
-                            title: 'A4',
-                            subtitle: 'Standard paper (office printer)',
-                            value: 'A4',
-                          ),
+                          _radioOption(title: 'A4', subtitle: 'Standard paper (office printer)', value: 'A4'),
                         ],
                       ),
                     ),
@@ -370,49 +387,18 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                   const SizedBox(height: 8),
                   _card(
                     child: RadioGroup<String>(
-                      groupValue: _fontSize,
-                      onChanged: (v) => setState(() => _fontSize = v!),
+                      groupValue: options.fontSize,
+                      onChanged: (v) => optionsNotifier.update(options.copyWith(fontSize: v)),
                       child: Column(
                         children: [
-                          _radioOption(
-                            title: 'Small',
-                            subtitle: '9px — compact, fits more lines',
-                            value: 'small',
-                          ),
+                          _radioOption(title: 'Small', subtitle: '9px — compact, fits more lines', value: 'small'),
                           _divider(),
-                          _radioOption(
-                            title: 'Medium',
-                            subtitle: '12px — default, balanced readability',
-                            value: 'medium',
-                          ),
+                          _radioOption(title: 'Medium', subtitle: '12px — default, balanced readability', value: 'medium'),
                           _divider(),
-                          _radioOption(
-                            title: 'Large',
-                            subtitle: '14px — easier to read',
-                            value: 'large',
-                          ),
+                          _radioOption(title: 'Large', subtitle: '14px — easier to read', value: 'large'),
                         ],
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Receipt preview
-                  _sectionHeader('PREVIEW'),
-                  const SizedBox(height: 8),
-                  _ReceiptPreview(
-                    header: _headerCtrl.text,
-                    footer: _footerCtrl.text,
-                    showOrderNumber: _showOrderNumber,
-                    showCashierName: _showCashierName,
-                    showBarcode: _showBarcode,
-                    showItemTax: _showItemTax,
-                    showCostPrice: _showCostPrice,
-                    showMargin: _showMargin,
-                    paperSize: _paperSize,
-                    fontSize: _fontSize,
-                    logoPath: _logoPath,
                   ),
 
                   const SizedBox(height: 24),
@@ -424,21 +410,16 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: AppColors.primaryFg,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: _saving ? null : _save,
                       child: _saving
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: AppColors.primaryFg))
-                          : const Text('Save Settings',
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600)),
+                              child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primaryFg))
+                          : const Text('Save Receipt Content',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
                   ),
 
@@ -473,8 +454,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         child: child,
       );
 
-  Widget _divider() =>
-      Divider(height: 1, color: AppColors.divider);
+  Widget _divider() => Divider(height: 1, color: AppColors.divider);
 
   Widget _toggle({
     required String title,
@@ -486,12 +466,9 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       contentPadding: EdgeInsets.zero,
       title: Text(title,
           style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500)),
+              color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle,
-          style: const TextStyle(
-              color: AppColors.textSecondary, fontSize: 12)),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       value: value,
       onChanged: onChanged,
       activeThumbColor: AppColors.primaryFg,
@@ -508,15 +485,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       contentPadding: EdgeInsets.zero,
       title: Text(title,
           style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500)),
+              color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle,
-          style: const TextStyle(
-              color: AppColors.textSecondary, fontSize: 12)),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       value: value,
-      fillColor: WidgetStateProperty.resolveWith((s) =>
-          s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
+      fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary),
     );
   }
 
@@ -545,242 +519,5 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         ),
       ),
     );
-  }
-}
-
-// Receipt preview widget
-
-class _ReceiptPreview extends StatelessWidget {
-  final String header;
-  final String footer;
-  final bool showOrderNumber;
-  final bool showCashierName;
-  final bool showBarcode;
-  final bool showItemTax;
-  final bool showCostPrice;
-  final bool showMargin;
-  final String paperSize;
-  final String fontSize;
-  final String? logoPath;
-
-  const _ReceiptPreview({
-    required this.header,
-    required this.footer,
-    required this.showOrderNumber,
-    required this.showCashierName,
-    required this.showBarcode,
-    required this.showItemTax,
-    required this.showCostPrice,
-    required this.showMargin,
-    required this.paperSize,
-    required this.fontSize,
-    this.logoPath,
-  });
-
-  double get _baseFontSize {
-    switch (fontSize) {
-      case 'small':
-        return 9.0;
-      case 'large':
-        return 14.0;
-      case 'medium':
-      default:
-        return 12.0;
-    }
-  }
-
-  String get _paperLabel {
-    switch (paperSize) {
-      case '58mm':
-        return '-- 58mm paper --';
-      case 'A4':
-        return '-- A4 paper --';
-      case '80mm':
-      default:
-        return '-- 80mm paper --';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const divLine = '--------------------------------';
-    final baseFz = _baseFontSize;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAF8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: DefaultTextStyle(
-        style: TextStyle(
-          fontFamily: 'Courier',
-          fontSize: baseFz,
-          color: const Color(0xFF1A1A1A),
-          height: 1.5,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (logoPath != null && File(logoPath!).existsSync()) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Image.file(File(logoPath!),
-                    height: 48, fit: BoxFit.contain),
-              ),
-              const SizedBox(height: 4),
-            ] else if (logoPath != null) ...[
-              Container(
-                width: 64,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Center(
-                  child: Text('[LOGO]',
-                      style: TextStyle(
-                          fontSize: 10, color: Color(0xFF6B7280))),
-                ),
-              ),
-              const SizedBox(height: 4),
-            ],
-            if (header.trim().isNotEmpty)
-              Text(header.trim(), textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            Text('Your Business Name',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: baseFz + 2),
-                textAlign: TextAlign.center),
-            if (showOrderNumber)
-              const Text('Order: #ORD-00001',
-                  textAlign: TextAlign.center),
-            const Text(divLine),
-            _PreviewRow(
-                left: 'Product A x2',
-                right: '10,000',
-                fontSize: baseFz),
-            if (showItemTax)
-              _PreviewRow(
-                  left: '  Tax (5%)',
-                  right: '500',
-                  fontSize: baseFz - 1),
-            if (showCostPrice)
-              _PreviewRow(
-                  left: '  Cost: 4,000',
-                  right: '',
-                  fontSize: baseFz - 1),
-            if (showMargin)
-              _PreviewRow(
-                  left: '  Margin: 50%',
-                  right: '',
-                  fontSize: baseFz - 1),
-            _PreviewRow(
-                left: 'Product B x1',
-                right: '5,000',
-                fontSize: baseFz),
-            if (showItemTax)
-              _PreviewRow(
-                  left: '  Tax (5%)',
-                  right: '250',
-                  fontSize: baseFz - 1),
-            if (showCostPrice)
-              _PreviewRow(
-                  left: '  Cost: 2,500',
-                  right: '',
-                  fontSize: baseFz - 1),
-            if (showMargin)
-              _PreviewRow(
-                  left: '  Margin: 50%',
-                  right: '',
-                  fontSize: baseFz - 1),
-            const Text(divLine),
-            _PreviewRow(
-                left: 'Subtotal', right: '15,000', fontSize: baseFz),
-            _PreviewRow(
-                left: 'Tax (5%)', right: '750', fontSize: baseFz),
-            _PreviewRow(
-                left: 'TOTAL',
-                right: '15,750',
-                bold: true,
-                fontSize: baseFz),
-            if (showCashierName)
-              Text('Cashier: John Doe',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: baseFz - 1)),
-            if (showBarcode) ...[
-              const SizedBox(height: 6),
-              Container(
-                height: 28,
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.divider),
-                  color: Colors.white,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    28,
-                    (i) => Container(
-                      width: i.isEven ? 2.0 : 1.0,
-                      color: i % 3 == 0
-                          ? const Color(0xFF1A1A1A)
-                          : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text('ORD-00001',
-                  style: TextStyle(fontSize: baseFz - 3),
-                  textAlign: TextAlign.center),
-            ],
-            if (footer.trim().isNotEmpty) ...[
-              const Text(divLine),
-              Text(footer.trim(), textAlign: TextAlign.center),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              _paperLabel,
-              style: const TextStyle(
-                  fontSize: 10, color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PreviewRow extends StatelessWidget {
-  final String left;
-  final String right;
-  final bool bold;
-  final double fontSize;
-
-  const _PreviewRow({
-    required this.left,
-    required this.right,
-    this.bold = false,
-    this.fontSize = 12,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextStyle(
-      fontFamily: 'Courier',
-      fontSize: fontSize,
-      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-      color: const Color(0xFF1A1A1A),
-    );
-    if (right.isEmpty) {
-      return Text(left, style: style);
-    }
-    final spaces = ' ' *
-        (32 - left.length - right.length)
-            .clamp(1, 32);
-    return Text('$left$spaces$right', style: style);
   }
 }
