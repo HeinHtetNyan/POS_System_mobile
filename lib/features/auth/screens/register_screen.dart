@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_endpoints.dart';
 import '../../../models/user_model.dart';
@@ -33,6 +35,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   String? _errorMessage;
+
+  late final TapGestureRecognizer _termsRecognizer = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl('https://www.sawyuntech.com/legal/terms');
+  late final TapGestureRecognizer _privacyRecognizer = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl('https://www.sawyuntech.com/legal/privacy');
+  late final TapGestureRecognizer _cookieRecognizer = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl('https://www.sawyuntech.com/legal/privacy');
+
+  static const TextStyle _legalLinkStyle = TextStyle(
+    color: AppColors.primary,
+    fontWeight: FontWeight.w600,
+    decoration: TextDecoration.underline,
+    decorationColor: AppColors.primary,
+    shadows: [Shadow(color: Color(0x99F59E0B), blurRadius: 8)],
+  );
+
+  Future<void> _openLegalUrl(String href) async {
+    final uri = Uri.tryParse(href);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   // Password hint state (driven by current password value)
   bool get _has8Chars => _passwordController.text.length >= 8;
@@ -67,6 +91,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _referralCodeController.dispose();
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
+    _cookieRecognizer.dispose();
     super.dispose();
   }
 
@@ -608,7 +635,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+
+                // Legal disclaimer
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text.rich(
+                    TextSpan(
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                      children: [
+                        const TextSpan(text: 'By continuing, you agree to our '),
+                        TextSpan(
+                          text: 'Terms of Service',
+                          recognizer: _termsRecognizer,
+                          style: _legalLinkStyle,
+                        ),
+                        const TextSpan(text: ', '),
+                        TextSpan(
+                          text: 'Privacy Policy',
+                          recognizer: _privacyRecognizer,
+                          style: _legalLinkStyle,
+                        ),
+                        const TextSpan(text: ' and '),
+                        TextSpan(
+                          text: 'Cookie Use',
+                          recognizer: _cookieRecognizer,
+                          style: _legalLinkStyle,
+                        ),
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
+                const SizedBox(height: 24),
               ],
             ),
           ),
