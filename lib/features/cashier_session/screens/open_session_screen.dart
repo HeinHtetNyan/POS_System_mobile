@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../providers/session_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
+
+// Same preset amounts as the web app's Quick Float row on Session Open.
+const List<double> _quickFloats = [50000, 100000, 150000, 200000, 300000];
 
 class OpenSessionScreen extends ConsumerStatefulWidget {
   const OpenSessionScreen({super.key});
@@ -17,6 +21,12 @@ class _OpenSessionScreenState extends ConsumerState<OpenSessionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _balanceController = TextEditingController(text: '0');
   String? _selectedBranchId;
+
+  void _selectQuickFloat(double amount) {
+    setState(() {
+      _balanceController.text = amount.toStringAsFixed(2);
+    });
+  }
 
   @override
   void dispose() {
@@ -189,6 +199,57 @@ class _OpenSessionScreenState extends ConsumerState<OpenSessionScreen> {
                               }
                               return null;
                             },
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'QUICK FLOAT',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                              color: AppColors.textSecondary
+                                  .withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _quickFloats.map((amount) {
+                              final active =
+                                  double.tryParse(_balanceController.text) ==
+                                      amount;
+                              return InkWell(
+                                onTap: () => _selectQuickFloat(amount),
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? AppColors.primary
+                                        : AppColors.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: active
+                                          ? AppColors.primary
+                                          : AppColors.divider,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    CurrencyFormatter.formatCompact(amount),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: active
+                                          ? AppColors.primaryFg
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
                           const SizedBox(height: 24),
                           // Open session button — amber primary
